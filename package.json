@@ -1,0 +1,22 @@
+{
+  "name": "tower-capture-management",
+  "version": "1.0.0",
+  "description": "Tower Capture Management App - Fullstack project with FE (Next.js) and BE (Node.js/Express + MongoDB)",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"yarn dev:backend\" \"yarn dev:frontend\"",
+    "dev:frontend": "cd frontend && yarn dev",
+    "dev:backend": "cd backend && yarn dev",
+    "build": "yarn build:frontend && yarn build:backend",
+    "build:frontend": "cd frontend && yarn build",
+    "build:backend": "cd backend && yarn build",
+    "install:all": "yarn install && cd frontend && yarn install && cd ../backend && yarn install",
+    "start": "cd backend && yarn start"
+  },
+  "keywords": ["tower", "capture", "management", "fullstack", "nextjs", "express", "mongodb"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
