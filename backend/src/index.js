@@ -9,6 +9,7 @@ const siteRoutes = require('./routes/sites');
 const typeRoutes = require('./routes/types');
 const captureRoutes = require('./routes/captures');
 const adminRoutes = require('./routes/admin');
+const { getUploadConfig } = require('./config/cloudinary');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -52,6 +53,15 @@ mongoose.connect(process.env.MONGODB_URI)
         app.listen(PORT, '0.0.0.0', () => {
             console.log(`Server running on port ${PORT}`);
             console.log(`Access via: http://0.0.0.0:${PORT}`);
+            
+            // Display upload configuration
+            const uploadConfig = getUploadConfig();
+            console.log(`📁 File Storage: ${uploadConfig.storage === 'cloudinary' ? 'Cloudinary (Production)' : 'Local (Development)'}`);
+            if (uploadConfig.storage === 'cloudinary') {
+                console.log(`   📂 Cloudinary Folder: ${uploadConfig.folder}`);
+            } else {
+                console.log(`   📂 Local Directory: ${uploadConfig.directory}`);
+            }
         });
     })
     .catch((error) => {

@@ -4,7 +4,7 @@ const Capture = require('../models/Capture');
 const Type = require('../models/Type');
 const Site = require('../models/Site');
 const { auth } = require('../middleware/auth');
-const upload = require('../middleware/upload');
+const { upload, handleCloudinaryUpload } = require('../middleware/upload');
 
 const router = express.Router();
 
@@ -12,6 +12,7 @@ const router = express.Router();
 router.post('/types/:typeId/captures', [
   auth,
   upload.array('images', 10),
+  handleCloudinaryUpload,
   body('typeId').notEmpty().withMessage('Type ID is required')
 ], async (req, res) => {
   try {
@@ -43,8 +44,16 @@ router.post('/types/:typeId/captures', [
       return res.status(403).json({ message: 'Access denied to this site' });
     }
 
-    // Create image URLs
-    const imageUrls = req.files.map(file => `/uploads/${file.filename}`);
+    // Create image URLs based on environment
+    const imageUrls = req.files.map(file => {
+      if (process.env.NODE_ENV === 'production' && file.cloudinaryUrl) {
+        // Production: use Cloudinary URLs
+        return file.cloudinaryUrl;
+      } else {
+        // Development: use local uploads URLs
+        return `/uploads/${file.filename}`;
+      }
+    });
 
     const capture = new Capture({
       typeId,
