@@ -1,10 +1,10 @@
 import axios from 'axios'
 import { User, Site, Type, Capture, LoginResponse } from '@/types'
+import { config } from './config'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.1.42:5000/api'
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: config.apiUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -22,7 +22,7 @@ api.interceptors.request.use((config) => {
 export const authAPI = {
   login: async (username: string, password: string): Promise<LoginResponse> => {
     console.log('Frontend: Attempting login...');
-    console.log('Frontend: API URL:', API_BASE_URL);
+    console.log('Frontend: API URL:', config.apiUrl);
     console.log('Frontend: Username:', username);
     
     try {
