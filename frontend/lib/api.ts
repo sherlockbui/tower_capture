@@ -64,6 +64,11 @@ export const typesAPI = {
     const response = await api.get(`/types/sites/${siteId}`)
     return response.data.types
   },
+
+  update: async (typeId: string, typeName: string, note: string): Promise<{ message: string; type: Type }> => {
+    const response = await api.put(`/types/${typeId}`, { typeName, note })
+    return response.data
+  },
 }
 
 export const capturesAPI = {

@@ -12,6 +12,11 @@ const typeSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  note: {
+    type: String,
+    default: '',
+    trim: true
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

@@ -5,6 +5,7 @@ import { adminAPI } from '@/lib/api'
 import { Download, Trash2, BarChart3, Users, UserCheck, MapPin, Camera } from 'lucide-react'
 import { format } from 'date-fns'
 import CreateUserForm from './CreateUserForm'
+import Toast from './Toast'
 
 export default function AdminPanel() {
   const [exportDate, setExportDate] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -28,6 +29,7 @@ export default function AdminPanel() {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
+  const [showToast, setShowToast] = useState(false)
 
   useEffect(() => {
     loadStats()
@@ -59,15 +61,15 @@ export default function AdminPanel() {
     try {
       setIsLoading(true)
       setMessage('')
-      
+
       // Backend returns Excel file directly
       const response = await adminAPI.exportData(exportDate)
-      
+
       // Create download link for the Excel file
-      const blob = new Blob([response], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      const blob = new Blob([response], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       })
-      
+
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -76,12 +78,14 @@ export default function AdminPanel() {
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      
+
       setMessage('Export to Excel completed successfully!')
       setMessageType('success')
+      setShowToast(true)
     } catch (error: any) {
       setMessage(error.response?.data?.message || 'Export failed')
       setMessageType('error')
+      setShowToast(true)
     } finally {
       setIsLoading(false)
     }
@@ -91,15 +95,15 @@ export default function AdminPanel() {
     try {
       setIsLoading(true)
       setMessage('')
-      
+
       // Backend returns ZIP file with all images
       const response = await adminAPI.downloadImages(exportDate)
-      
+
       // Create download link for the ZIP file
-      const blob = new Blob([response], { 
-        type: 'application/zip' 
+      const blob = new Blob([response], {
+        type: 'application/zip'
       })
-      
+
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -108,12 +112,14 @@ export default function AdminPanel() {
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      
+
       setMessage('Download all images completed successfully!')
       setMessageType('success')
+      setShowToast(true)
     } catch (error: any) {
       setMessage(error.response?.data?.message || 'Download failed')
       setMessageType('error')
+      setShowToast(true)
     } finally {
       setIsLoading(false)
     }
@@ -129,28 +135,30 @@ export default function AdminPanel() {
     try {
       setIsLoading(true)
       setMessage('')
-      
+
       // API now automatically sends confirm=true
       const result = await adminAPI.cleanup(cleanupDate)
       setMessage(result.message)
       setMessageType('success')
-      
+      setShowToast(true)
+
       // Reload stats after cleanup
       loadStats()
     } catch (error: any) {
       setMessage(error.response?.data?.message || 'Cleanup failed')
       setMessageType('error')
+      setShowToast(true)
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* System Statistics */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 sm:p-8">
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-4">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center">
             <div className="p-2 bg-blue-100 rounded-lg mr-3">
               <BarChart3 className="h-6 w-6 text-blue-600" />
             </div>
@@ -162,33 +170,33 @@ export default function AdminPanel() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 sm:gap-6">
           <div className="text-center p-4 sm:p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200 hover:shadow-md transition-all duration-200">
-            <div className="text-2xl sm:text-3xl font-bold text-blue-700 mb-1">{stats.totalUsers}</div>
+            <div className="text-xl sm:text-2xl font-bold text-blue-700 mb-1">{stats.totalUsers}</div>
             <div className="text-sm font-medium text-blue-800">Users</div>
           </div>
           <div className="text-center p-4 sm:p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200 hover:shadow-md transition-all duration-200">
-            <div className="text-2xl sm:text-3xl font-bold text-green-700 mb-1">{stats.totalSites}</div>
+            <div className="text-xl sm:text-2xl font-bold text-green-700 mb-1">{stats.totalSites}</div>
             <div className="text-sm font-medium text-green-800">Sites</div>
           </div>
           <div className="text-center p-4 sm:p-6 bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl border border-yellow-200 hover:shadow-md transition-all duration-200">
-            <div className="text-2xl sm:text-3xl font-bold text-yellow-700 mb-1">{stats.totalTypes}</div>
+            <div className="text-xl sm:text-2xl font-bold text-yellow-700 mb-1">{stats.totalTypes}</div>
             <div className="text-sm font-medium text-yellow-800">Types</div>
           </div>
           <div className="text-center p-4 sm:p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200 hover:shadow-md transition-all duration-200">
-            <div className="text-2xl sm:text-3xl font-bold text-purple-700 mb-1">{stats.totalCaptures}</div>
+            <div className="text-xl sm:text-2xl font-bold text-purple-700 mb-1">{stats.totalCaptures}</div>
             <div className="text-sm font-medium text-purple-800">Captures</div>
           </div>
           <div className="text-center p-4 sm:p-6 bg-gradient-to-br from-red-50 to-red-100 rounded-xl border border-red-200 hover:shadow-md transition-all duration-200 col-span-2 sm:col-span-1">
-            <div className="text-2xl sm:text-3xl font-bold text-red-700 mb-1">{stats.totalImages}</div>
+            <div className="text-xl sm:text-2xl font-bold text-red-700 mb-1">{stats.totalImages}</div>
             <div className="text-sm font-medium text-red-800">Images</div>
           </div>
         </div>
       </div>
 
       {/* User Performance Statistics */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 sm:p-8">
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
           <div className="mb-4 lg:mb-0">
-            <h3 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center mb-2">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center mb-2">
               <div className="p-2 bg-green-100 rounded-lg mr-3">
                 <UserCheck className="h-6 w-6 text-green-600" />
               </div>
@@ -211,7 +219,7 @@ export default function AdminPanel() {
             </div>
           </div>
         </div>
-        
+
         {userStats.length === 0 ? (
           <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-xl">
             <UserCheck className="h-16 w-16 mx-auto mb-4 text-gray-300" />
@@ -223,19 +231,19 @@ export default function AdminPanel() {
             {/* Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-blue-700">{userStats.reduce((sum, user) => sum + user.uniqueSites, 0)}</div>
+                <div className="text-xl font-bold text-blue-700">{userStats.reduce((sum, user) => sum + user.uniqueSites, 0)}</div>
                 <div className="text-sm text-blue-600 font-medium">Total Sites</div>
               </div>
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-green-700">{userStats.reduce((sum, user) => sum + user.captureCount, 0)}</div>
+                <div className="text-xl font-bold text-green-700">{userStats.reduce((sum, user) => sum + user.captureCount, 0)}</div>
                 <div className="text-sm text-green-600 font-medium">Total Types</div>
               </div>
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-purple-700">{userStats.reduce((sum, user) => sum + user.imageCount, 0)}</div>
+                <div className="text-xl font-bold text-purple-700">{userStats.reduce((sum, user) => sum + user.imageCount, 0)}</div>
                 <div className="text-sm text-purple-600 font-medium">Total Images</div>
               </div>
             </div>
-            
+
             {/* Report Table */}
             <div className="bg-gray-50 rounded-xl p-4">
               <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
@@ -264,16 +272,9 @@ export default function AdminPanel() {
                     {userStats.map((user, index) => (
                       <tr key={user._id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors duration-200`}>
                         <td className="px-4 py-4">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-md">
-                              <span className="text-white text-sm font-bold">
-                                {user.username.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-gray-900 text-base truncate">{user.username}</div>
-                              <div className="text-sm text-gray-500 capitalize bg-gray-100 px-2 py-1 rounded-full inline-block">{user.role}</div>
-                            </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-gray-900 text-base truncate">{user.username}</div>
+                            <div className="text-sm text-gray-500 capitalize bg-gray-100 px-2 py-1 rounded-full inline-block">{user.role}</div>
                           </div>
                         </td>
                         <td className="px-4 py-4 text-center">
@@ -308,9 +309,9 @@ export default function AdminPanel() {
       </div>
 
       {/* Data Export */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 sm:p-8">
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-4">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center">
             <div className="p-2 bg-blue-100 rounded-lg mr-3">
               <Download className="h-6 w-6 text-blue-600" />
             </div>
@@ -342,7 +343,7 @@ export default function AdminPanel() {
               <Download className="h-5 w-5" />
               <span>{isLoading ? 'Exporting...' : 'Export to Excel'}</span>
             </button>
-            
+
             <button
               onClick={handleDownloadImages}
               disabled={isLoading}
@@ -356,9 +357,9 @@ export default function AdminPanel() {
       </div>
 
       {/* User Management */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 sm:p-8">
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-4">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center">
             <div className="p-2 bg-purple-100 rounded-lg mr-3">
               <Users className="h-6 w-6 text-purple-600" />
             </div>
@@ -372,9 +373,9 @@ export default function AdminPanel() {
       </div>
 
       {/* Data Cleanup */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 sm:p-8">
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-4">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+          <h3 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center">
             <div className="p-2 bg-red-100 rounded-lg mr-3">
               <Trash2 className="h-6 w-6 text-red-600" />
             </div>
@@ -408,21 +409,14 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      {/* Message Display */}
-      {message && (
-        <div className={`rounded-xl p-6 border-2 ${
-          messageType === 'success' 
-            ? 'bg-green-50 border-green-200 text-green-800' 
-            : 'bg-red-50 border-red-200 text-red-800'
-        }`}>
-          <div className="flex items-center">
-            <div className={`w-5 h-5 rounded-full mr-3 ${
-              messageType === 'success' ? 'bg-green-500' : 'bg-red-500'
-            }`}></div>
-            <span className="font-semibold">{message}</span>
-          </div>
-        </div>
-      )}
+      {/* Toast Component */}
+      <Toast
+        message={message}
+        type={messageType}
+        isVisible={showToast}
+        onClose={() => setShowToast(false)}
+        duration={5000}
+      />
     </div>
   )
 }

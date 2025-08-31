@@ -46,7 +46,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
       <div className="bg-white rounded-lg shadow-lg p-6 space-y-6">
         <div className="text-center">
           <LogIn className="mx-auto h-12 w-12 text-primary-600 mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900">Sign In</h2>
+          <h2 className="text-xl font-bold text-gray-900">Sign In</h2>
           <p className="text-gray-600 mt-2">
             Enter your credentials to access the system
           </p>

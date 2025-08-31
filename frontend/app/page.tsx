@@ -89,14 +89,14 @@ export default function Home() {
       {/* Main Content */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-4xl">
         {/* Main title - Mobile-first */}
-        <div className="text-center mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+        {/* <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
             Tower Capture Management
           </h1>
           <p className="text-sm sm:text-base text-gray-600 px-2">
             Manage tower capture operations and image uploads
           </p>
-        </div>
+        </div> */}
         
         {renderContent()}
       </main>

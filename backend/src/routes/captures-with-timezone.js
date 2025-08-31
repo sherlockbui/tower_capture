@@ -17,7 +17,7 @@ const router = express.Router();
 // Upload images for a type
 router.post('/types/:typeId/captures', [
   auth,
-  upload.array('images', 10),
+  upload.array('images', 15),
   handleCloudinaryUpload,
   body('typeId').notEmpty().withMessage('Type ID is required')
 ], async (req, res) => {
@@ -137,6 +137,7 @@ router.get('/', auth, async (req, res) => {
         id: capture._id,
         typeId: capture.typeId._id,
         typeName: capture.typeId.typeName,
+        note: capture.typeId.note || '',
         siteCode: capture.typeId.siteId.siteCode,
         images: capture.images,
         capturedBy: capture.capturedBy.username,
@@ -202,6 +203,7 @@ router.get('/admin/all', auth, async (req, res) => {
         id: capture._id,
         typeId: capture.typeId._id,
         typeName: capture.typeId.typeName,
+        note: capture.typeId.note || '',
         siteCode: capture.typeId.siteId.siteCode,
         images: capture.images,
         capturedBy: capture.capturedBy.username,

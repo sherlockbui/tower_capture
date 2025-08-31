@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { User, Upload, BarChart3, LogOut, Menu, X } from 'lucide-react'
+import { Upload, BarChart3, LogOut, Menu, X } from 'lucide-react'
+import { User } from '@/types'
 
 interface HeaderProps {
   user: User | null
@@ -132,13 +133,7 @@ export default function Header({ user, currentView, onViewChange, onLogout }: He
         {/* Mobile menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden">
-            <div className="px-4 pt-4 pb-6 space-y-3 border-t border-gray-200 bg-gray-50">
-              {/* Mobile Navigation Header */}
-              <div className="text-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">Navigation</h3>
-                <p className="text-sm text-gray-500">Choose your destination</p>
-              </div>
-
+            <div className="px-4 pt-4 pb-6 space-y-3 border-t border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50">
               {/* Mobile Navigation Links */}
               <div className="space-y-2">
                 <button
@@ -149,7 +144,7 @@ export default function Header({ user, currentView, onViewChange, onLogout }: He
                   className={`w-full text-left px-4 py-4 rounded-xl text-base font-medium transition-all duration-200 flex items-center space-x-3 ${
                     currentView === 'upload'
                       ? 'bg-blue-500 text-white shadow-lg transform scale-105'
-                      : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-700 border border-gray-200'
+                      : 'bg-white text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-200 shadow-sm'
                   }`}
                 >
                   <div className={`p-2 rounded-lg ${currentView === 'upload' ? 'bg-blue-600' : 'bg-blue-100'}`}>
@@ -175,7 +170,7 @@ export default function Header({ user, currentView, onViewChange, onLogout }: He
                     className={`w-full text-left px-4 py-4 rounded-xl text-base font-medium transition-all duration-200 flex items-center space-x-3 ${
                       currentView === 'admin'
                         ? 'bg-blue-500 text-white shadow-lg transform scale-105'
-                        : 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-700 border border-gray-200'
+                        : 'bg-white text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-200 shadow-sm'
                     }`}
                   >
                     <div className={`p-2 rounded-lg ${currentView === 'admin' ? 'bg-blue-600' : 'bg-blue-100'}`}>
@@ -195,11 +190,11 @@ export default function Header({ user, currentView, onViewChange, onLogout }: He
               </div>
               
               {/* Mobile User Info */}
-              <div className="bg-white rounded-xl p-4 border border-gray-200 mt-6">
-                <div className="text-center mb-4">
+              <div className="bg-white rounded-xl p-4 border border-gray-200 mt-6 shadow-md">
+                <div className="text-left mb-4">
                   <h4 className="text-sm font-semibold text-gray-700 mb-2">User Profile</h4>
                 </div>
-                <div className="flex items-center justify-center space-x-3 mb-4">
+                <div className="flex items-center space-x-3 mb-4">
                   <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-500 rounded-full flex items-center justify-center shadow-md">
                     <span className="text-white text-lg font-bold">
                       {user.username.charAt(0).toUpperCase()}
@@ -226,9 +221,10 @@ export default function Header({ user, currentView, onViewChange, onLogout }: He
               <div className="text-center pt-2">
                 <button
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-100 transition-all duration-200"
+                  className="inline-flex items-center justify-center space-x-2 px-6 py-3 text-sm font-medium text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-50 rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200 shadow-sm"
                 >
-                  Close Menu
+                  <X className="h-4 w-4" />
+                  <span>Close Menu</span>
                 </button>
               </div>
             </div>

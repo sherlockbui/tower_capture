@@ -44,6 +44,7 @@ router.post('/sites/:siteId', [
           id: type._id,
           siteId: type.siteId,
           typeName: type.typeName,
+          note: type.note || '',
           createdAt: type.createdAt
         }
       });
@@ -64,6 +65,7 @@ router.post('/sites/:siteId', [
         id: type._id,
         siteId: type.siteId,
         typeName: type.typeName,
+        note: type.note || '',
         createdAt: type.createdAt
       }
     });
@@ -96,11 +98,64 @@ router.get('/sites/:siteId', auth, async (req, res) => {
         id: type._id,
         siteId: type.siteId,
         typeName: type.typeName,
+        note: type.note || '',
         createdAt: type.createdAt
       }))
     });
   } catch (error) {
     console.error('Get types error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update type by ID
+router.put('/:typeId', [
+  auth,
+  body('typeName').notEmpty().withMessage('Type name is required'),
+  body('note').optional().isString().withMessage('Note must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { typeId } = req.params;
+    const { typeName, note } = req.body;
+
+    // Find type and check ownership
+    const type = await Type.findById(typeId);
+    if (!type) {
+      return res.status(404).json({ message: 'Type not found' });
+    }
+
+    // Check if user owns the site that contains this type
+    const site = await Site.findOne({
+      _id: type.siteId,
+      createdBy: req.user._id
+    });
+
+    if (!site) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Update type
+    type.typeName = typeName;
+    type.note = note || '';
+    await type.save();
+
+    res.json({
+      message: 'Type updated successfully',
+      type: {
+        id: type._id,
+        siteId: type.siteId,
+        typeName: type.typeName,
+        note: type.note,
+        createdAt: type.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Update type error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
