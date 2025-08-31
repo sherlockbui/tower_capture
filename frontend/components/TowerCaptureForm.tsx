@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Upload, Plus, X, Trash2, Edit3, ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react'
 import { sitesAPI, typesAPI, capturesAPI } from '@/lib/api'
-import { config } from '@/lib/config'
+import { config, getImageUrl } from '@/lib/config'
 import ImageModal from './ImageModal'
 
 // Validation schemas
@@ -213,9 +213,9 @@ export default function TowerCaptureForm() {
         console.log('Created object URL:', objectUrl)
         return objectUrl
       } else {
-        // For string URLs, add backend prefix
-        const fullUrl = `${config.backendUrl}${image}`
-        console.log('Created full URL:', fullUrl)
+        // For string URLs, use getImageUrl helper
+        const fullUrl = getImageUrl(image as string)
+        console.log('Created full URL using getImageUrl:', fullUrl)
         return fullUrl
       }
     })
@@ -992,7 +992,7 @@ export default function TowerCaptureForm() {
                               {type.images.map((image, index) => (
                                 <div key={index} className="relative group">
                                   <img
-                                    src={`${config.backendUrl}${image}`}
+                                    src={getImageUrl(image)}
                                     alt={`Image ${index + 1}`}
                                     className="w-full h-16 sm:h-20 object-cover rounded border border-gray-200 cursor-pointer transition-opacity"
                                     style={{ touchAction: 'manipulation' }}

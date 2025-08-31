@@ -9,6 +9,7 @@ const ExcelJS = require('exceljs');
 const archiver = require('archiver');
 const path = require('path');
 const fs = require('fs');
+const cloudinary = require('cloudinary').v2; // Added for Cloudinary cleanup
 
 const router = express.Router();
 
@@ -120,7 +121,7 @@ router.get('/export', [
           maSoTram: capture.typeId.siteId.siteCode,
           khuVuc: getKhuVuc(capture.typeId.siteId.siteCode),
           nguoiChup: capture.capturedBy.username,
-          checklist: 'Done', // Mặc định là Done
+          checklist: '', // Mặc định là Done
           ghiChu: capture.note || '', // Ghi chú nếu có, không có thì để trống
           tien: '' // Để trống theo yêu cầu
         });
@@ -274,22 +275,132 @@ router.get('/download-images', [
   }
 });
 
+// Helper functions for cleanup
+const deleteLocalFiles = (captures) => {
+  let deletedCount = 0;
+  let errorCount = 0;
+
+  captures.forEach(capture => {
+    capture.images.forEach(imagePath => {
+      try {
+        // Only handle local uploads
+        if (imagePath.startsWith('/uploads/')) {
+          const cleanImagePath = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
+          const fullImagePath = path.join(__dirname, '../../', cleanImagePath);
+          
+          if (fs.existsSync(fullImagePath)) {
+            fs.unlinkSync(fullImagePath);
+            console.log('🗑️ Deleted local file:', fullImagePath);
+            deletedCount++;
+          } else {
+            console.log('⚠️ Local file not found:', fullImagePath);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error deleting local file:', imagePath, error);
+        errorCount++;
+      }
+    });
+  });
+
+  return { deletedCount, errorCount };
+};
+
+const deleteCloudinaryImages = async (captures) => {
+  let deletedCount = 0;
+  let errorCount = 0;
+
+  for (const capture of captures) {
+    for (const imageUrl of capture.images) {
+      try {
+        // Only handle Cloudinary URLs
+        if (imageUrl.includes('cloudinary.com')) {
+          // Extract public ID from Cloudinary URL
+          // URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/filename.jpg
+          const urlParts = imageUrl.split('/');
+          const filename = urlParts[urlParts.length - 1];
+          const folder = urlParts[urlParts.length - 2];
+          
+          // Remove file extension and version prefix
+          const publicId = filename.split('.')[0];
+          const fullPublicId = `${folder}/${publicId}`;
+          
+          console.log('🗑️ Deleting Cloudinary image:', { url: imageUrl, publicId: fullPublicId });
+          
+          await cloudinary.uploader.destroy(fullPublicId);
+          console.log('✅ Deleted Cloudinary image:', fullPublicId);
+          deletedCount++;
+        }
+      } catch (error) {
+        console.error('❌ Error deleting Cloudinary image:', imageUrl, error);
+        errorCount++;
+      }
+    }
+  }
+
+  return { deletedCount, errorCount };
+};
+
+// NEW: Hybrid cleanup function that handles both local and Cloudinary images
+const hybridCleanup = async (captures) => {
+  let localDeleted = 0;
+  let cloudinaryDeleted = 0;
+  let localErrors = 0;
+  let cloudinaryErrors = 0;
+
+  console.log('🔄 Starting hybrid cleanup...');
+  console.log(`📊 Total captures to process: ${captures.length}`);
+
+  // Process local images first
+  console.log('💻 Processing local images...');
+  const localResult = deleteLocalFiles(captures);
+  localDeleted = localResult.deletedCount;
+  localErrors = localResult.errorCount;
+
+  // Process Cloudinary images
+  console.log('🌐 Processing Cloudinary images...');
+  const cloudinaryResult = await deleteCloudinaryImages(captures);
+  cloudinaryDeleted = cloudinaryResult.deletedCount;
+  cloudinaryErrors = cloudinaryResult.errorCount;
+
+  console.log('✅ Hybrid cleanup completed:');
+  console.log(`   - Local images deleted: ${localDeleted}`);
+  console.log(`   - Cloudinary images deleted: ${cloudinaryDeleted}`);
+  console.log(`   - Local errors: ${localErrors}`);
+  console.log(`   - Cloudinary errors: ${cloudinaryErrors}`);
+
+  return {
+    localDeleted,
+    cloudinaryDeleted,
+    localErrors,
+    cloudinaryErrors,
+    totalDeleted: localDeleted + cloudinaryDeleted,
+    totalErrors: localErrors + cloudinaryErrors
+  };
+};
+
 // Cleanup old data
 router.delete('/cleanup', [
   adminAuth,
-  query('before').notEmpty().withMessage('Before date parameter is required (YYYY-MM-DD)')
+  query('before').notEmpty().withMessage('Before date parameter is required (YYYY-MM-DD)'),
+  query('confirm').notEmpty().withMessage('Confirmation required. Set confirm=true to proceed with deletion')
 ], async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    const { before, confirm } = req.query;
+    
+    // Safety check
+    if (confirm !== 'true') {
+      return res.status(400).json({ 
+        message: 'Confirmation required. Set confirm=true to proceed with deletion',
+        warning: 'This action will permanently delete data and cannot be undone!'
+      });
     }
-
-    const { before } = req.query;
+    
     const cutoffDate = new Date(before);
     cutoffDate.setHours(23, 59, 59, 999);
 
-    // Find captures to delete
+    console.log(`🧹 Starting cleanup for data before: ${cutoffDate.toISOString()}`);
+
     const capturesToDelete = await Capture.find({
       capturedAt: { $lt: cutoffDate }
     });
@@ -298,24 +409,38 @@ router.delete('/cleanup', [
       return res.json({ message: 'No old data found to delete' });
     }
 
-    // Delete image files
-    capturesToDelete.forEach(capture => {
-      capture.images.forEach(imagePath => {
-        const fullImagePath = path.join(__dirname, '../..', imagePath);
-        if (fs.existsSync(fullImagePath)) {
-          fs.unlinkSync(fullImagePath);
-        }
-      });
-    });
+    console.log(`📊 Found ${capturesToDelete.length} captures to delete`);
 
-    // Delete captures from database
+    // Use hybrid cleanup for all environments
+    console.log('🔄 Using hybrid cleanup (handles both local and Cloudinary images)');
+    const imageCleanupResult = await hybridCleanup(capturesToDelete);
+
     const deleteResult = await Capture.deleteMany({
       capturedAt: { $lt: cutoffDate }
     });
 
+    console.log(`🗑️ Cleanup completed:`);
+    console.log(`   - Database records: ${deleteResult.deletedCount}`);
+    console.log(`   - Local images deleted: ${imageCleanupResult.localDeleted}`);
+    console.log(`   - Cloudinary images deleted: ${imageCleanupResult.cloudinaryDeleted}`);
+    console.log(`   - Total errors: ${imageCleanupResult.totalErrors}`);
+
     res.json({
-      message: `Deleted ${deleteResult.deletedCount} captures and associated images`,
-      deletedCount: deleteResult.deletedCount
+      message: `Cleanup completed successfully`,
+      summary: {
+        databaseRecords: deleteResult.deletedCount,
+        imagesDeleted: {
+          local: imageCleanupResult.localDeleted,
+          cloudinary: imageCleanupResult.cloudinaryDeleted,
+          total: imageCleanupResult.totalDeleted
+        },
+        errors: {
+          local: imageCleanupResult.localErrors,
+          cloudinary: imageCleanupResult.cloudinaryErrors,
+          total: imageCleanupResult.totalErrors
+        },
+        environment: 'hybrid (local + cloudinary)'
+      }
     });
 
   } catch (error) {

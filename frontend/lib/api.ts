@@ -104,7 +104,7 @@ export const adminAPI = {
   },
 
   cleanup: async (beforeDate: string): Promise<{ message: string; deletedCount: number }> => {
-    const response = await api.delete(`/admin/cleanup?before=${beforeDate}`)
+    const response = await api.delete(`/admin/cleanup?before=${beforeDate}&confirm=true`)
     return response.data
   },
 

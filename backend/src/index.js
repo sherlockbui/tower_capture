@@ -13,15 +13,47 @@ const { getUploadConfig } = require('./config/cloudinary');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+// CORS Configuration from environment variables
+const getCorsOrigins = () => {
+  // Check if allow all is enabled (⚠️ WARNING: Only for development/testing)
+  if (process.env.CORS_ALLOW_ALL === 'true') {
+    console.log('⚠️ CORS: ALLOWING ALL ORIGINS (CORS_ALLOW_ALL=true)');
+    return true; // This will allow all origins
+  }
+  
+  const corsOrigin = process.env.CORS_ORIGIN;
+  
+  if (!corsOrigin) {
+    // Fallback to development origins if no CORS_ORIGIN set
+    const fallbackOrigins = [
+      'http://localhost:3000',
+      'http://192.168.1.42:3000',
+      'http://0.0.0.0:3000',
+      // Allow all LAN IPs for development
+      /^http:\/\/192\.168\.\d+\.\d+:3000$/,
+      /^http:\/\/10\.\d+\.\d+\.\d+:3000$/,
+    ];
+    console.log('🌐 CORS: Using fallback development origins (no CORS_ORIGIN set)');
+    return fallbackOrigins;
+  }
+  
+  // Parse comma-separated origins from environment
+  const origins = corsOrigin.split(',').map(origin => origin.trim());
+  
+  // Add regex patterns for LAN IPs if in development mode
+  if (process.env.NODE_ENV !== 'production') {
+    origins.push(
+      /^http:\/\/192\.168\.\d+\.\d+:3000$/,
+      /^http:\/\/10\.\d+\.\d+\.\d+:3000$/
+    );
+  }
+  
+  console.log('🌐 CORS: Origins configured from environment:', origins);
+  return origins;
+};
+
 const corsOptions = {
-    origin: [
-        'http://localhost:3000',
-        'http://192.168.1.42:3000', // Thay bằng IP máy bạn
-        'http://0.0.0.0:3000',
-        // Allow all LAN IPs
-        /^http:\/\/192\.168\.\d+\.\d+:3000$/,
-        /^http:\/\/10\.\d+\.\d+\.\d+:3000$/,
-    ],
+    origin: getCorsOrigins(),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

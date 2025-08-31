@@ -130,6 +130,7 @@ export default function AdminPanel() {
       setIsLoading(true)
       setMessage('')
       
+      // API now automatically sends confirm=true
       const result = await adminAPI.cleanup(cleanupDate)
       setMessage(result.message)
       setMessageType('success')

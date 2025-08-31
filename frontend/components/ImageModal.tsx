@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { getImageUrl } from '@/lib/config'
 
 interface ImageModalProps {
   isOpen: boolean
@@ -119,19 +120,30 @@ export default function ImageModal({
          onTouchEnd={onTouchEnd}
        >
          {currentImage ? (
-           <img
-             src={currentImage}
-             alt={`Image ${currentIndex + 1}`}
-             className="max-w-full max-h-full w-auto h-auto object-contain"
-             style={{
-               maxHeight: 'calc(100vh - 120px)',
-               maxWidth: 'calc(100vw - 32px)'
-             }}
-             onError={(e) => {
-               console.error('Image failed to load:', currentImage)
-               e.currentTarget.style.display = 'none'
-             }}
-           />
+           <div>
+             <img
+               src={getImageUrl(currentImage)}
+               alt={`Image ${currentIndex + 1}`}
+               className="max-w-full max-h-full w-auto h-auto object-contain"
+               style={{
+                 maxHeight: 'calc(100vh - 120px)',
+                 maxWidth: 'calc(100vw - 32px)'
+               }}
+               onLoad={() => {
+                 console.log('✅ Image loaded successfully:', getImageUrl(currentImage));
+               }}
+               onError={(e) => {
+                 console.error('❌ Image failed to load:', currentImage);
+                 console.error('❌ Full URL was:', getImageUrl(currentImage));
+                 e.currentTarget.style.display = 'none';
+               }}
+             />
+             {/* Debug info */}
+             <div className="text-white text-xs bg-black bg-opacity-50 p-2 mt-2 rounded">
+               <p>Original: {currentImage}</p>
+               <p>Full URL: {getImageUrl(currentImage)}</p>
+             </div>
+           </div>
          ) : (
            <div className="text-white text-center p-4">
              <p>No image available</p>
