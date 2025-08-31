@@ -212,25 +212,6 @@ router.get('/download-images', [
       fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    // Create ZIP archive
-    const zipPath = path.join(tempDir, `images_${date}.zip`);
-    const output = fs.createWriteStream(zipPath);
-    const archive = archiver('zip', { zlib: { level: 9 } });
-
-    output.on('close', () => {
-      // Send ZIP file
-      res.download(zipPath, `captures_${date}.zip`, (err) => {
-        // Clean up temporary file
-        if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
-      });
-    });
-
-    archive.on('error', (err) => {
-      throw err;
-    });
-
-    archive.pipe(output);
-
     // Group captures by site
     const siteGroups = {};
     captures.forEach(capture => {
@@ -242,59 +223,115 @@ router.get('/download-images', [
     });
 
     // Add images to ZIP with folder structure
-    for (const [siteCode, siteCaptures] of Object.entries(siteGroups)) {
-      for (const capture of siteCaptures) {
-        for (let index = 0; index < capture.images.length; index++) {
-          const imagePath = capture.images[index];
-          
-          if (imagePath.includes('cloudinary.com')) {
-            // Production: Handle Cloudinary images
-            try {
-              console.log('Processing Cloudinary image:', imagePath);
+    let processedImages = 0;
+    const totalImages = captures.reduce((sum, capture) => sum + capture.images.length, 0);
+    
+    console.log(`📊 Starting to process ${totalImages} images...`);
+    
+    // Set proper headers BEFORE creating archive
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename=captures_${date}.zip`);
+    
+    // Create archive and pipe to response
+    const archive = archiver('zip', { 
+      zlib: { level: 9 },
+      store: false // Enable compression
+    });
+    
+    // Pipe archive to response
+    archive.pipe(res);
+    
+    // Handle archive events
+    archive.on('error', (err) => {
+      console.error('❌ Archive error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ message: 'Error creating ZIP archive' });
+      }
+    });
+    
+    archive.on('end', () => {
+      console.log(`🎉 Archive completed successfully with ${processedImages} images`);
+    });
+    
+    // Process images sequentially to avoid race conditions
+    const processImages = async () => {
+      try {
+        for (const [siteCode, siteCaptures] of Object.entries(siteGroups)) {
+          for (const capture of siteCaptures) {
+            for (let index = 0; index < capture.images.length; index++) {
+              const imagePath = capture.images[index];
               
-              // Download image from Cloudinary
-              const response = await axios.get(imagePath, { responseType: 'stream' });
-              
-              const fileName = `${capture.typeId.typeName}_${capture._id}_${index}.jpg`;
-              const zipPath = `${siteCode}/${fileName}`;
-              
-              archive.append(response.data, { name: zipPath });
-              console.log('Added Cloudinary image to ZIP:', zipPath);
-            } catch (error) {
-              console.error('Error downloading Cloudinary image:', imagePath, error);
-            }
-          } else if (imagePath.startsWith('/uploads/')) {
-            // Development: Handle local files
-            try {
-              const cleanImagePath = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
-              const fullImagePath = path.join(__dirname, '../../', cleanImagePath);
-              
-              console.log('Processing local image:', {
-                originalPath: imagePath,
-                cleanPath: cleanImagePath,
-                fullPath: fullImagePath,
-                exists: fs.existsSync(fullImagePath)
-              });
-              
-              if (fs.existsSync(fullImagePath)) {
-                const fileName = `${capture.typeId.typeName}_${capture._id}_${index}${path.extname(imagePath)}`;
-                const zipPath = `${siteCode}/${fileName}`;
-                archive.file(fullImagePath, { name: zipPath });
-                console.log('Added local image to ZIP:', zipPath);
+              if (imagePath.includes('cloudinary.com')) {
+                // Production: Handle Cloudinary images
+                try {
+                  console.log(`🌐 Processing Cloudinary image ${processedImages + 1}/${totalImages}:`, imagePath);
+                  
+                  // Download image from Cloudinary with timeout
+                  const response = await axios.get(imagePath, { 
+                    responseType: 'stream',
+                    timeout: 30000, // 30 seconds timeout
+                    maxContentLength: 10 * 1024 * 1024 // 10MB max
+                  });
+                  
+                  const fileName = `${capture.typeId.typeName}_${capture._id}_${index}.jpg`;
+                  const zipPath = `${siteCode}/${fileName}`;
+                  
+                  // Add to archive
+                  archive.append(response.data, { name: zipPath });
+                  processedImages++;
+                  console.log(`✅ Added Cloudinary image to ZIP: ${zipPath} (${processedImages}/${totalImages})`);
+                  
+                } catch (error) {
+                  console.error(`❌ Error downloading Cloudinary image:`, imagePath, error.message);
+                  // Continue with next image
+                }
+              } else if (imagePath.startsWith('/uploads/')) {
+                // Development: Handle local files
+                try {
+                  const cleanImagePath = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
+                  const fullImagePath = path.join(__dirname, '../../', cleanImagePath);
+                  
+                  console.log(`💻 Processing local image ${processedImages + 1}/${totalImages}:`, {
+                    originalPath: imagePath,
+                    cleanPath: cleanImagePath,
+                    fullPath: fullImagePath,
+                    exists: fs.existsSync(fullImagePath)
+                  });
+                  
+                  if (fs.existsSync(fullImagePath)) {
+                    const fileName = `${capture.typeId.typeName}_${capture._id}_${index}${path.extname(imagePath)}`;
+                    const zipPath = `${siteCode}/${fileName}`;
+                    archive.file(fullImagePath, { name: zipPath });
+                    processedImages++;
+                    console.log(`✅ Added local image to ZIP: ${zipPath} (${processedImages}/${totalImages})`);
+                  } else {
+                    console.log(`⚠️ Local image not found: ${fullImagePath}`);
+                  }
+                } catch (error) {
+                  console.error(`❌ Error processing local image:`, imagePath, error.message);
+                }
               } else {
-                console.log('Local image not found:', fullImagePath);
+                console.log(`⚠️ Skipping unsupported image type: ${imagePath}`);
               }
-            } catch (error) {
-              console.error('Error processing local image:', imagePath, error);
             }
-          } else {
-            console.log('Skipping unsupported image type:', imagePath);
           }
         }
+        
+        console.log(`📦 Processed ${processedImages}/${totalImages} images. Finalizing archive...`);
+        
+        // Finalize archive after all images processed
+        archive.finalize();
+        
+      } catch (error) {
+        console.error('❌ Error processing images:', error);
+        if (!res.headersSent) {
+          res.status(500).json({ message: 'Error processing images' });
+        }
       }
-    }
-
-    archive.finalize();
+    };
+    
+    // Start processing images
+    processImages();
 
   } catch (error) {
     console.error('Download images error:', error);
