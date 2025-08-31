@@ -244,24 +244,35 @@ router.get('/download-images', [
     Object.entries(siteGroups).forEach(([siteCode, siteCaptures]) => {
       siteCaptures.forEach(capture => {
         capture.images.forEach((imagePath, index) => {
-          // Remove leading slash if present and construct full path
-          const cleanImagePath = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
-          const fullImagePath = path.join(__dirname, '../../', cleanImagePath);
+          // Skip Cloudinary URLs - only process local files
+          if (imagePath.includes('cloudinary.com')) {
+            console.log('Skipping Cloudinary image:', imagePath);
+            return;
+          }
           
-          console.log('Processing image:', {
-            originalPath: imagePath,
-            cleanPath: cleanImagePath,
-            fullPath: fullImagePath,
-            exists: fs.existsSync(fullImagePath)
-          });
-          
-          if (fs.existsSync(fullImagePath)) {
-            const fileName = `${capture.typeId.typeName}_${capture._id}_${index}${path.extname(imagePath)}`;
-            const zipPath = `${siteCode}/${fileName}`;
-            archive.file(fullImagePath, { name: zipPath });
-            console.log('Added to ZIP:', zipPath);
+          // Only handle local uploads
+          if (imagePath.startsWith('/uploads/')) {
+            // Remove leading slash if present and construct full path
+            const cleanImagePath = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
+            const fullImagePath = path.join(__dirname, '../../', cleanImagePath);
+            
+            console.log('Processing local image:', {
+              originalPath: imagePath,
+              cleanPath: cleanImagePath,
+              fullPath: fullImagePath,
+              exists: fs.existsSync(fullImagePath)
+            });
+            
+            if (fs.existsSync(fullImagePath)) {
+              const fileName = `${capture.typeId.typeName}_${capture._id}_${index}${path.extname(imagePath)}`;
+              const zipPath = `${siteCode}/${fileName}`;
+              archive.file(fullImagePath, { name: zipPath });
+              console.log('Added local image to ZIP:', zipPath);
+            } else {
+              console.log('Local image not found:', fullImagePath);
+            }
           } else {
-            console.log('Image not found:', fullImagePath);
+            console.log('Skipping non-uploads image:', imagePath);
           }
         });
       });
