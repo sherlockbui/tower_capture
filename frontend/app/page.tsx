@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import LoginForm from '@/components/LoginForm'
 import TowerCaptureForm from '@/components/TowerCaptureForm'
 import AdminPanel from '@/components/AdminPanel'
+import Header from '@/components/Header'
 import { User } from '@/types'
 import { authAPI } from '@/lib/api'
 
@@ -14,7 +15,7 @@ export default function Home() {
 
   const handleLogin = (userData: User) => {
     setUser(userData)
-    setCurrentView(userData.role === 'admin' ? 'admin' : 'upload')
+    setCurrentView('upload') // Luôn set về upload form, không phân biệt role
     // Lưu user vào localStorage
     localStorage.setItem('user', JSON.stringify(userData))
   }
@@ -37,7 +38,7 @@ export default function Home() {
           // Kiểm tra token có hợp lệ không
           const currentUser = await authAPI.getCurrentUser()
           setUser(currentUser)
-          setCurrentView(currentUser.role === 'admin' ? 'admin' : 'upload')
+          setCurrentView('upload') // Luôn set về upload form, không phân biệt role
         }
       } catch (error) {
         // Token không hợp lệ, xóa khỏi localStorage
@@ -67,83 +68,38 @@ export default function Home() {
 
     switch (currentView) {
       case 'upload':
-        return (
-          <div className="space-y-4 sm:space-y-6">
-            {/* Mobile-first header */}
-            <div className="flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
-              {/* Title - Full width on mobile, left-aligned on desktop */}
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 text-center sm:text-left">
-                Tower Capture Upload
-              </h1>
-              
-              {/* Buttons - Stacked on mobile, horizontal on desktop */}
-              <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
-                {user.role === 'admin' && (
-                  <button
-                    onClick={() => setCurrentView('admin')}
-                    className="btn-secondary w-full sm:w-auto text-sm sm:text-base py-2 px-3 sm:px-4"
-                  >
-                    Admin Panel
-                  </button>
-                )}
-                <button 
-                  onClick={handleLogout} 
-                  className="btn-secondary w-full sm:w-auto text-sm sm:text-base py-2 px-3 sm:px-4"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-            <TowerCaptureForm />
-          </div>
-        )
+        return <TowerCaptureForm />
       case 'admin':
-        return (
-          <div className="space-y-4 sm:space-y-6">
-            {/* Mobile-first header */}
-            <div className="flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
-              {/* Title - Full width on mobile, left-aligned on desktop */}
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 text-center sm:text-left">
-                Admin Panel
-              </h1>
-              
-              {/* Buttons - Stacked on mobile, horizontal on desktop */}
-              <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
-                <button
-                  onClick={() => setCurrentView('upload')}
-                  className="btn-secondary w-full sm:w-auto text-sm sm:text-base py-2 px-3 sm:px-4"
-                >
-                  Upload Form
-                </button>
-                <button 
-                  onClick={handleLogout} 
-                  className="btn-secondary w-full sm:w-auto text-sm sm:text-base py-2 px-3 sm:px-4"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-            <AdminPanel />
-          </div>
-        )
+        return <AdminPanel />
       default:
         return <LoginForm onLogin={handleLogin} />
     }
   }
 
   return (
-    <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-4xl">
-      {/* Main title - Mobile-first */}
-      <div className="text-center mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
-          Tower Capture Management
-        </h1>
-        <p className="text-sm sm:text-base text-gray-600 px-2">
-          Manage tower capture operations and image uploads
-        </p>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <Header 
+        user={user}
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        onLogout={handleLogout}
+      />
       
-      {renderContent()}
+      {/* Main Content */}
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-4xl">
+        {/* Main title - Mobile-first */}
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
+            Tower Capture Management
+          </h1>
+          <p className="text-sm sm:text-base text-gray-600 px-2">
+            Manage tower capture operations and image uploads
+          </p>
+        </div>
+        
+        {renderContent()}
+      </main>
     </div>
   )
 }

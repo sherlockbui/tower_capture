@@ -7,7 +7,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const siteRoutes = require('./routes/sites');
 const typeRoutes = require('./routes/types');
-const captureRoutes = require('./routes/captures');
+const captureRoutes = require('./routes/captures-with-timezone');
 const adminRoutes = require('./routes/admin');
 const { getUploadConfig } = require('./config/cloudinary');
 

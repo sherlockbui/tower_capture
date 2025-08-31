@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { transformTimestamps } = require('../utils/timezone');
 
 const captureSchema = new mongoose.Schema({
   typeId: {
@@ -20,7 +21,9 @@ const captureSchema = new mongoose.Schema({
     default: Date.now
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { transform: transformTimestamps },
+  toObject: { transform: transformTimestamps }
 });
 
 module.exports = mongoose.model('Capture', captureSchema);

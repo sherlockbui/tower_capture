@@ -1,10 +1,30 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Upload, Plus, X, Trash2, Edit3, ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react'
 import { sitesAPI, typesAPI, capturesAPI } from '@/lib/api'
 import { config } from '@/lib/config'
 import ImageModal from './ImageModal'
+
+// Validation schemas
+const stationCodeSchema = z.object({
+  stationCode: z.string()
+    .min(1, 'Station Code là bắt buộc')
+    .transform(val => val.trim().toUpperCase())
+    .refine(val => val.length > 0, 'Station Code không được để trống')
+    .refine(val => !val.includes(' '), 'Station Code không được chứa khoảng trắng')
+})
+
+const typeNameSchema = z.object({
+  typeName: z.string()
+    .min(1, 'Type Name là bắt buộc')
+    .transform(val => val.trim())
+    .refine(val => val.length > 0, 'Type Name không được để trống')
+    .refine(val => !val.includes(' '), 'Type Name không được chứa khoảng trắng')
+})
 
 interface CaptureType {
   id: string
@@ -27,39 +47,60 @@ interface StationData {
 }
 
 export default function TowerCaptureForm() {
-  const [stationCode, setStationCode] = useState('DNI0272')
-  const [captureTypes, setCaptureTypes] = useState<CaptureType[]>([
-    {
-      id: '1',
-      typeName: 'GPV',
-      note: '',
-      images: []
-    }
-  ])
+  const [captureTypes, setCaptureTypes] = useState<CaptureType[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState('')
-  
+
+  // Form for station code validation
+  const stationForm = useForm({
+    resolver: zodResolver(stationCodeSchema),
+    defaultValues: {
+      stationCode: ''
+    }
+  })
+
+  // Form for type name validation
+  const typeForm = useForm({
+    resolver: zodResolver(typeNameSchema),
+    defaultValues: {
+      typeName: ''
+    }
+  })
+
   // New state for uploaded images
   const [uploadedStations, setUploadedStations] = useState<StationData[]>([])
   const [expandedStations, setExpandedStations] = useState<Set<string>>(new Set())
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set())
   const [isLoadingStations, setIsLoadingStations] = useState(false)
-  
+  const [addingImagesTypeId, setAddingImagesTypeId] = useState<string | null>(null)
+
   // Date navigation state
-  const [selectedDate, setSelectedDate] = useState(new Date())
-  const [dateInput, setDateInput] = useState(new Date().toISOString().split('T')[0])
-  
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date()
+    // Set to start of day in local timezone
+    now.setHours(0, 0, 0, 0)
+    return now
+  })
+  const [dateInput, setDateInput] = useState(() => {
+    const now = new Date()
+    // Format as YYYY-MM-DD in local timezone
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  })
+
   // Edit mode state
   const [editingType, setEditingType] = useState<string | null>(null)
   const [editingNote, setEditingNote] = useState<string | null>(null)
   const [editTypeName, setEditTypeName] = useState('')
   const [editNoteText, setEditNoteText] = useState('')
-  
+
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalImages, setModalImages] = useState<string[]>([])
   const [modalCurrentIndex, setModalCurrentIndex] = useState(0)
-  
+
   // Cleanup object URLs when modal closes
   useEffect(() => {
     return () => {
@@ -80,34 +121,40 @@ export default function TowerCaptureForm() {
   const loadUploadedStations = async () => {
     try {
       setIsLoadingStations(true)
-      // Use selected date
-      const dateString = selectedDate.toISOString().split('T')[0]
+      // Use selected date in local timezone (not UTC)
+      const year = selectedDate.getFullYear()
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0')
+      const day = String(selectedDate.getDate()).padStart(2, '0')
+      const dateString = `${year}-${month}-${day}`
       console.log('Loading stations for date:', dateString)
-      
+
       const response = await capturesAPI.getByDate(dateString)
       console.log('API response:', response)
-      
+
       // Group captures by station and type
       const stationMap = new Map<string, StationData>()
-      
+
       response.captures.forEach((capture: any) => {
         console.log('Processing capture:', capture)
+        console.log('Capture date:', capture.capturedAt)
+        console.log('Selected date:', selectedDate)
+        
         const siteCode = capture.siteCode
         const typeName = capture.typeName
         const typeId = capture.typeId
-        
-                 if (!stationMap.has(siteCode)) {
-           stationMap.set(siteCode, {
-             id: siteCode, // Use siteCode as ID since we don't have site._id
-             siteCode,
-             createdAt: selectedDate.toLocaleDateString('vi-VN'),
-             types: []
-           })
-         }
-        
+
+        if (!stationMap.has(siteCode)) {
+          stationMap.set(siteCode, {
+            id: siteCode, // Use siteCode as ID since we don't have site._id
+            siteCode,
+            createdAt: selectedDate.toLocaleDateString('vi-VN'),
+            types: []
+          })
+        }
+
         const station = stationMap.get(siteCode)!
         let type = station.types.find(t => t.typeName === typeName)
-        
+
         if (!type) {
           type = {
             id: typeId,
@@ -118,11 +165,11 @@ export default function TowerCaptureForm() {
           }
           station.types.push(type)
         }
-        
+
         type.imageCount += capture.images.length
         type.images.push(...capture.images)
       })
-      
+
       const stationsArray = Array.from(stationMap.values())
       console.log('Final stations array:', stationsArray)
       setUploadedStations(stationsArray)
@@ -157,7 +204,7 @@ export default function TowerCaptureForm() {
     console.log('Opening modal with images:', images)
     console.log('Start index:', startIndex)
     console.log('Image types:', images.map(img => ({ type: typeof img, isFile: img instanceof File })))
-    
+
     // Handle both File objects and string URLs
     const fullImageUrls = images.map(image => {
       if (image instanceof File) {
@@ -173,7 +220,7 @@ export default function TowerCaptureForm() {
       }
     })
     console.log('Final modal images:', fullImageUrls)
-    
+
     setModalImages(fullImageUrls)
     setModalCurrentIndex(startIndex)
     setIsModalOpen(true)
@@ -181,7 +228,7 @@ export default function TowerCaptureForm() {
 
   const closeImageModal = () => {
     console.log('Closing modal, cleaning up URLs:', modalImages)
-    
+
     // Cleanup object URLs before closing
     modalImages.forEach(url => {
       if (url.startsWith('blob:')) {
@@ -189,7 +236,7 @@ export default function TowerCaptureForm() {
         URL.revokeObjectURL(url)
       }
     })
-    
+
     setIsModalOpen(false)
     setModalImages([])
     setModalCurrentIndex(0)
@@ -212,24 +259,43 @@ export default function TowerCaptureForm() {
     const newDate = new Date(selectedDate)
     newDate.setDate(newDate.getDate() - 1)
     setSelectedDate(newDate)
-    setDateInput(newDate.toISOString().split('T')[0])
+    
+    // Format as YYYY-MM-DD in local timezone
+    const year = newDate.getFullYear()
+    const month = String(newDate.getMonth() + 1).padStart(2, '0')
+    const day = String(newDate.getDate()).padStart(2, '0')
+    setDateInput(`${year}-${month}-${day}`)
   }
 
   const goToNextDay = () => {
     const newDate = new Date(selectedDate)
     newDate.setDate(newDate.getDate() + 1)
     setSelectedDate(newDate)
-    setDateInput(newDate.toISOString().split('T')[0])
+    
+    // Format as YYYY-MM-DD in local timezone
+    const year = newDate.getFullYear()
+    const month = String(newDate.getMonth() + 1).padStart(2, '0')
+    const day = String(newDate.getDate()).padStart(2, '0')
+    setDateInput(`${year}-${month}-${day}`)
   }
 
   const goToToday = () => {
     const today = new Date()
+    // Set to start of day in local timezone
+    today.setHours(0, 0, 0, 0)
     setSelectedDate(today)
-    setDateInput(today.toISOString().split('T')[0])
+    
+    // Format as YYYY-MM-DD in local timezone
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    setDateInput(`${year}-${month}-${day}`)
   }
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = new Date(e.target.value)
+    // Set to start of day in local timezone
+    newDate.setHours(0, 0, 0, 0)
     setSelectedDate(newDate)
     setDateInput(e.target.value)
   }
@@ -315,8 +381,8 @@ export default function TowerCaptureForm() {
         const updatedTypes = station.types.map(type => {
           if (type.id === typeId) {
             const updatedImages = type.images.filter((_, index) => index !== imageIndex)
-            return { 
-              ...type, 
+            return {
+              ...type,
               images: updatedImages,
               imageCount: updatedImages.length
             }
@@ -351,38 +417,90 @@ export default function TowerCaptureForm() {
   }
 
   const updateCaptureType = (id: string, field: keyof CaptureType, value: string) => {
-    setCaptureTypes(prev => prev.map(type => 
+    setCaptureTypes(prev => prev.map(type =>
       type.id === id ? { ...type, [field]: value } : type
     ))
   }
 
   const addImages = (typeId: string, files: FileList) => {
     const fileArray = Array.from(files)
-    setCaptureTypes(prev => prev.map(type => 
-      type.id === typeId 
+    setCaptureTypes(prev => prev.map(type =>
+      type.id === typeId
         ? { ...type, images: [...type.images, ...fileArray] }
         : type
     ))
   }
 
   const removeImage = (typeId: string, imageIndex: number) => {
-    setCaptureTypes(prev => prev.map(type => 
-      type.id === typeId 
+    setCaptureTypes(prev => prev.map(type =>
+      type.id === typeId
         ? { ...type, images: type.images.filter((_, index) => index !== imageIndex) }
         : type
     ))
   }
 
   const clearAllImages = (typeId: string) => {
-    setCaptureTypes(prev => prev.map(type => 
+    setCaptureTypes(prev => prev.map(type =>
       type.id === typeId ? { ...type, images: [] } : type
     ))
   }
 
+  // Add images to existing type in uploaded stations
+  const addImagesToExistingType = async (typeId: string, files: FileList) => {
+    try {
+      setAddingImagesTypeId(typeId)
+      const fileArray = Array.from(files)
+      console.log('Adding images to existing type:', typeId, 'Files:', fileArray.length)
+      
+      // Upload images to backend
+      await capturesAPI.upload(typeId, fileArray)
+      
+      // Reload uploaded stations to show new images
+      await loadUploadedStations()
+      
+      setMessage(`Đã thêm ${fileArray.length} hình ảnh thành công!`)
+    } catch (error: any) {
+      console.error('Error adding images to existing type:', error)
+      let errorMessage = 'Không thể thêm hình ảnh. Vui lòng thử lại.'
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      setMessage(errorMessage)
+    } finally {
+      setAddingImagesTypeId(null)
+    }
+  }
+
   const handleUpload = async () => {
-    if (!stationCode.trim()) {
-      setMessage('Vui lòng nhập Station Code')
+    // Clear previous errors
+    setMessage('')
+
+    // Validate station code using react-hook-form
+    const stationResult = await stationForm.trigger()
+    if (!stationResult) {
+      setMessage('Vui lòng kiểm tra lại Station Code')
       return
+    }
+
+    if (captureTypes.length === 0) {
+      setMessage('Vui lòng thêm ít nhất một Capture Type')
+      return
+    }
+
+    // Validate all type names
+    for (const type of captureTypes) {
+      if (!type.typeName.trim()) {
+        setMessage('Tất cả Type Name phải được nhập')
+        return
+      }
+      if (type.typeName.includes(' ')) {
+        setMessage('Type Name không được chứa khoảng trắng')
+        return
+      }
     }
 
     const hasImages = captureTypes.some(type => type.images.length > 0)
@@ -394,11 +512,13 @@ export default function TowerCaptureForm() {
     try {
       setIsLoading(true)
       setMessage('Đang upload...')
-      
+
+      const stationCode = stationForm.getValues('stationCode').trim()
+
       // Tạo hoặc lấy site
       let site
       try {
-        const response = await sitesAPI.create(stationCode.trim())
+        const response = await sitesAPI.create(stationCode)
         site = response.site
       } catch (error: any) {
         console.error('Site creation error:', error)
@@ -430,29 +550,34 @@ export default function TowerCaptureForm() {
         // Upload hình ảnh
         await capturesAPI.upload(captureType.id, type.images)
       }
-      
+
       setMessage('Upload thành công!')
       // Reset form after successful upload
-      setCaptureTypes([{
-        id: '1',
-        typeName: 'GPV',
-        note: '',
-        images: []
-      }])
-      setStationCode('DNI0272')
-      
+      setCaptureTypes([])
+      stationForm.reset()
+      typeForm.reset()
+
       // Reload uploaded stations
+      console.log('Upload successful, reloading stations for current date:', selectedDate)
       await loadUploadedStations()
+      
+      // Also reload for today to ensure data appears immediately
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      if (today.getTime() !== selectedDate.getTime()) {
+        console.log('Reloading for today as well to ensure data appears')
+        setSelectedDate(today)
+      }
     } catch (error: any) {
       console.error('Upload error:', error)
       let errorMessage = 'Upload thất bại. Vui lòng thử lại.'
-      
+
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message
       } else if (error.message) {
         errorMessage = error.message
       }
-      
+
       setMessage(errorMessage)
     } finally {
       setIsLoading(false)
@@ -463,19 +588,27 @@ export default function TowerCaptureForm() {
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Upload Images</h2>
-        
+
         {/* Station Code */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Station Code *
           </label>
           <input
+            {...stationForm.register('stationCode')}
             type="text"
-            value={stationCode}
-            onChange={(e) => setStationCode(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              stationForm.formState.errors.stationCode ? 'border-red-500' : 'border-gray-300'
+            }`}
             placeholder="Nhập mã trạm..."
+            onChange={(e) => {
+              const value = e.target.value.toUpperCase()
+              stationForm.setValue('stationCode', value)
+            }}
           />
+          {stationForm.formState.errors.stationCode && (
+            <p className="text-red-600 text-sm mt-1">{stationForm.formState.errors.stationCode.message}</p>
+          )}
         </div>
 
         {/* Capture Types */}
@@ -490,6 +623,14 @@ export default function TowerCaptureForm() {
               <span>Add Type</span>
             </button>
           </div>
+
+          {captureTypes.length === 0 && (
+            <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
+              <Plus className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+              <p>Chưa có Capture Type nào</p>
+              <p className="text-sm text-gray-400 mt-1">Hãy click "Add Type" để bắt đầu</p>
+            </div>
+          )}
 
           <div className="space-y-4">
             {captureTypes.map((type, index) => (
@@ -514,10 +655,18 @@ export default function TowerCaptureForm() {
                   <input
                     type="text"
                     value={type.typeName}
-                    onChange={(e) => updateCaptureType(type.id, 'typeName', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nhập tên type..."
+                    onChange={(e) => {
+                      const value = e.target.value
+                      updateCaptureType(type.id, 'typeName', value)
+                    }}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      type.typeName.includes(' ') ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="BTS, GPV, etc..."
                   />
+                  {type.typeName.includes(' ') && (
+                    <p className="text-red-600 text-sm mt-1">Type Name không được chứa khoảng trắng</p>
+                  )}
                 </div>
 
                 {/* Note */}
@@ -578,31 +727,31 @@ export default function TowerCaptureForm() {
                     </div>
                   )}
 
-                                     {/* Image Previews */}
-                   {type.images.length > 0 && (
-                     <div className="grid grid-cols-3 gap-2">
-                       {type.images.map((image, imageIndex) => (
-                         <div key={imageIndex} className="relative group">
-                                                      <img
-                              src={URL.createObjectURL(image)}
-                              alt={`Preview ${imageIndex + 1}`}
-                              className="w-full h-20 object-cover rounded border border-gray-200 cursor-pointer transition-opacity"
-                              style={{ touchAction: 'manipulation' }}
-                              onClick={() => openImageModal([image], 0)}
-                            />
-                           <button
-                             onClick={() => removeImage(type.id, imageIndex)}
-                             className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                           >
-                             <X className="h-3 w-3" />
-                           </button>
-                           <div className="text-xs text-gray-500 mt-1 text-center">
-                             {(image.size / 1024 / 1024).toFixed(2)} MB
-                           </div>
-                         </div>
-                       ))}
-                     </div>
-                   )}
+                  {/* Image Previews */}
+                  {type.images.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {type.images.map((image, imageIndex) => (
+                        <div key={imageIndex} className="relative group">
+                          <img
+                            src={URL.createObjectURL(image)}
+                            alt={`Preview ${imageIndex + 1}`}
+                            className="w-full h-20 object-cover rounded border border-gray-200 cursor-pointer transition-opacity"
+                            style={{ touchAction: 'manipulation' }}
+                            onClick={() => openImageModal([image], 0)}
+                          />
+                          <button
+                            onClick={() => removeImage(type.id, imageIndex)}
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                          <div className="text-xs text-gray-500 mt-1 text-center">
+                            {(image.size / 1024 / 1024).toFixed(2)} MB
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -622,123 +771,199 @@ export default function TowerCaptureForm() {
 
       {/* Message */}
       {message && (
-        <div className={`rounded-lg p-4 text-center ${
-          message.includes('thành công') 
-            ? 'bg-green-50 border border-green-200 text-green-800' 
+        <div className={`rounded-lg p-4 text-center ${message.includes('thành công')
+            ? 'bg-green-50 border border-green-200 text-green-800'
             : message.includes('Upload thất bại')
-            ? 'bg-red-50 border border-red-200 text-red-800'
-            : 'bg-blue-50 border border-blue-200 text-blue-800'
-        }`}>
+              ? 'bg-red-50 border border-red-200 text-red-800'
+              : 'bg-blue-50 border border-blue-200 text-blue-800'
+          }`}>
           {message}
         </div>
       )}
 
-             {/* Uploaded Images Section */}
-       <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6">
-         <div className="flex flex-col space-y-4 mb-6">
-           <h2 className="text-xl font-semibold text-gray-900">Uploaded Images</h2>
-           
-           {/* Date Navigation */}
-           <div className="flex flex-wrap items-center gap-2">
-             <button
-               onClick={goToPreviousDay}
-               className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
-               title="Ngày trước"
-             >
-               ←
-             </button>
-             
-             <input
-               type="date"
-               value={dateInput}
-               onChange={handleDateChange}
-               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm min-w-0 flex-1"
-             />
-             
-             <button
-               onClick={goToNextDay}
-               className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
-               title="Ngày sau"
-             >
-               →
-             </button>
-             
-             <button
-               onClick={goToToday}
-               className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-               title="Hôm nay"
-             >
-               Today
-             </button>
-           </div>
-         </div>
-         
-         {isLoadingStations ? (
+      {/* Uploaded Images Section */}
+      <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6">
+        <div className="flex flex-col space-y-4 mb-6">
+          <h2 className="text-xl font-semibold text-gray-900">Uploaded Images</h2>
+
+          {/* Date Navigation */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={goToPreviousDay}
+              className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
+              title="Ngày trước"
+            >
+              ←
+            </button>
+
+            <input
+              type="date"
+              value={dateInput}
+              onChange={handleDateChange}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm min-w-0 flex-1"
+            />
+
+            <button
+              onClick={goToNextDay}
+              className="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm"
+              title="Ngày sau"
+            >
+              →
+            </button>
+
+            <button
+              onClick={goToToday}
+              className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              title="Hôm nay"
+            >
+              Today
+            </button>
+          </div>
+        </div>
+
+        {isLoadingStations ? (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="text-gray-600 mt-2">Đang tải...</p>
           </div>
-                 ) : uploadedStations.length === 0 ? (
-           <div className="text-center py-8 text-gray-500">
-             <ImageIcon className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-             <p>Chưa có trạm nào được chụp vào {selectedDate.toLocaleDateString('vi-VN')}</p>
-             <p className="text-sm text-gray-400 mt-1">Hãy upload một số hình ảnh hoặc chọn ngày khác</p>
-           </div>
+        ) : uploadedStations.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <ImageIcon className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+            <p>Chưa có trạm nào được chụp vào {selectedDate.toLocaleDateString('vi-VN')}</p>
+            <p className="text-sm text-gray-400 mt-1">Hãy upload một số hình ảnh hoặc chọn ngày khác</p>
+          </div>
         ) : (
           <div className="space-y-4">
             {uploadedStations.map((station) => (
               <div key={station.id} className="border border-gray-200 rounded-lg">
-                                 {/* Station Header */}
-                 <div 
-                   className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 cursor-pointer hover:bg-gray-50 space-y-2 sm:space-y-0"
-                   onClick={() => toggleStationExpanded(station.siteCode)}
-                 >
-                   <div className="flex items-center space-x-3">
-                     {expandedStations.has(station.siteCode) ? (
-                       <ChevronDown className="h-5 w-5 text-gray-500" />
-                     ) : (
-                       <ChevronRight className="h-5 w-5 text-gray-500" />
-                     )}
-                     <div>
-                       <h3 className="font-medium text-gray-900">Station: {station.siteCode}</h3>
-                     </div>
-                   </div>
-                   <div className="flex flex-wrap items-center gap-2">
-                     <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                       {station.types.length} types
-                     </span>
-                     <span className="text-sm text-gray-500">Created: {station.createdAt}</span>
-                   </div>
-                 </div>
+                {/* Station Header */}
+                <div
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 cursor-pointer hover:bg-gray-50 space-y-2 sm:space-y-0"
+                  onClick={() => toggleStationExpanded(station.siteCode)}
+                >
+                  <div className="flex items-center space-x-3">
+                    {expandedStations.has(station.siteCode) ? (
+                      <ChevronDown className="h-5 w-5 text-gray-500" />
+                    ) : (
+                      <ChevronRight className="h-5 w-5 text-gray-500" />
+                    )}
+                    <div>
+                      <h3 className="font-medium text-gray-900">Station: {station.siteCode}</h3>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                      {station.types.length} types
+                    </span>
+                    <span className="text-sm text-gray-500">Created: {station.createdAt}</span>
+                  </div>
+                </div>
 
                 {/* Station Types */}
                 {expandedStations.has(station.siteCode) && (
                   <div className="border-t border-gray-200 p-4 space-y-4">
                     {station.types.map((type) => (
                       <div key={type.id} className="border border-gray-200 rounded-lg">
-                                                 {/* Type Header */}
-                         <div 
-                           className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 cursor-pointer hover:bg-gray-50 space-y-2 sm:space-y-0"
-                           onClick={() => toggleTypeExpanded(type.id)}
-                         >
-                           <div className="flex items-center space-x-3">
-                             {expandedTypes.has(type.id) ? (
-                               <ChevronDown className="h-4 w-4 text-gray-500" />
-                             ) : (
-                               <ChevronRight className="h-4 w-4 text-gray-500" />
-                             )}
-                             <div className="flex items-center space-x-2">
-                               {editingType === type.id ? (
-                                 <div className="flex items-center space-x-2">
-                                   <input
-                                     type="text"
-                                     value={editTypeName}
-                                     onChange={(e) => setEditTypeName(e.target.value)}
-                                     className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                     autoFocus
-                                   />
-                                                                       <button
-                                      onClick={() => saveEditType(type.id)}
+                        {/* Type Header */}
+                        <div
+                          className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 cursor-pointer hover:bg-gray-50 space-y-2 sm:space-y-0"
+                          onClick={() => toggleTypeExpanded(type.id)}
+                        >
+                          <div className="flex items-center space-x-3">
+                            {expandedTypes.has(type.id) ? (
+                              <ChevronDown className="h-4 w-4 text-gray-500" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-gray-500" />
+                            )}
+                            <div className="flex items-center space-x-2">
+                              {editingType === type.id ? (
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="text"
+                                    value={editTypeName}
+                                    onChange={(e) => setEditTypeName(e.target.value)}
+                                    className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => saveEditType(type.id)}
+                                    className="text-green-600 hover:text-green-700 text-lg font-bold px-2 py-1"
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    onClick={cancelEdit}
+                                    className="text-red-600 hover:text-red-700 text-lg font-bold px-2 py-1"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center space-x-2">
+                                  <span className="font-medium text-gray-900">{type.typeName}</span>
+                                  <Edit3
+                                    className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      startEditType(type.id, type.typeName)
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                              {type.imageCount} images
+                            </span>
+                            <button 
+                              className={`px-3 py-1 text-xs rounded text-white ${
+                                addingImagesTypeId === type.id 
+                                  ? 'bg-gray-400 cursor-not-allowed' 
+                                  : 'bg-blue-600 hover:bg-blue-700'
+                              }`}
+                              onClick={() => {
+                                if (addingImagesTypeId === type.id) return
+                                // Trigger file input click
+                                const fileInput = document.getElementById(`file-input-${type.id}`) as HTMLInputElement
+                                if (fileInput) {
+                                  fileInput.click()
+                                }
+                              }}
+                              disabled={addingImagesTypeId === type.id}
+                            >
+                              {addingImagesTypeId === type.id ? 'Adding...' : '+ Add Images'}
+                            </button>
+                            <input
+                              id={`file-input-${type.id}`}
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => e.target.files && addImagesToExistingType(type.id, e.target.files)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Type Details */}
+                        {expandedTypes.has(type.id) && (
+                          <div className="border-t border-gray-200 p-3 space-y-3">
+                            {/* Note */}
+                            <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
+                              <span className="text-sm text-gray-600">Note:</span>
+                              <div className="flex items-center space-x-2">
+                                {editingNote === type.id ? (
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="text"
+                                      value={editNoteText}
+                                      onChange={(e) => setEditNoteText(e.target.value)}
+                                      className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
+                                      placeholder="Enter note..."
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() => saveEditNote(type.id)}
                                       className="text-green-600 hover:text-green-700 text-lg font-bold px-2 py-1"
                                     >
                                       ✓
@@ -749,97 +974,43 @@ export default function TowerCaptureForm() {
                                     >
                                       ✕
                                     </button>
-                                 </div>
-                               ) : (
-                                 <div className="flex items-center space-x-2">
-                                   <span className="font-medium text-gray-900">{type.typeName}</span>
-                                   <Edit3 
-                                     className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-pointer" 
-                                     onClick={(e) => {
-                                       e.stopPropagation()
-                                       startEditType(type.id, type.typeName)
-                                     }}
-                                   />
-                                 </div>
-                               )}
-                             </div>
-                           </div>
-                           <div className="flex flex-wrap items-center gap-2">
-                             <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                               {type.imageCount} images
-                             </span>
-                             <button className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 text-xs">
-                               + Add Images
-                             </button>
-                           </div>
-                         </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-sm text-gray-900 break-words">{type.note}</span>
+                                    <Edit3
+                                      className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-pointer flex-shrink-0"
+                                      onClick={() => startEditNote(type.id, type.note)}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
 
-                        {/* Type Details */}
-                        {expandedTypes.has(type.id) && (
-                          <div className="border-t border-gray-200 p-3 space-y-3">
-                                                                                      {/* Note */}
-                              <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
-                                <span className="text-sm text-gray-600">Note:</span>
-                                <div className="flex items-center space-x-2">
-                                  {editingNote === type.id ? (
-                                    <div className="flex items-center space-x-2">
-                                      <input
-                                        type="text"
-                                        value={editNoteText}
-                                        onChange={(e) => setEditNoteText(e.target.value)}
-                                        className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
-                                        placeholder="Enter note..."
-                                        autoFocus
-                                      />
-                                                                             <button
-                                         onClick={() => saveEditNote(type.id)}
-                                         className="text-green-600 hover:text-green-700 text-lg font-bold px-2 py-1"
-                                       >
-                                         ✓
-                                       </button>
-                                       <button
-                                         onClick={cancelEdit}
-                                         className="text-red-600 hover:text-red-700 text-lg font-bold px-2 py-1"
-                                       >
-                                         ✕
-                                       </button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center space-x-2">
-                                      <span className="text-sm text-gray-900 break-words">{type.note}</span>
-                                      <Edit3 
-                                        className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-pointer flex-shrink-0" 
-                                        onClick={() => startEditNote(type.id, type.note)}
-                                      />
-                                    </div>
-                                  )}
+                            {/* Images Grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {type.images.map((image, index) => (
+                                <div key={index} className="relative group">
+                                  <img
+                                    src={`${config.backendUrl}${image}`}
+                                    alt={`Image ${index + 1}`}
+                                    className="w-full h-16 sm:h-20 object-cover rounded border border-gray-200 cursor-pointer transition-opacity"
+                                    style={{ touchAction: 'manipulation' }}
+                                    onClick={() => openImageModal(type.images, index)}
+                                  />
+                                  <button
+                                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      deleteImage(type.id, index)
+                                    }}
+                                    title="Delete image"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
                                 </div>
-                              </div>
-
-                                                                                      {/* Images Grid */}
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                {type.images.map((image, index) => (
-                                                                     <div key={index} className="relative group">
-                                     <img
-                                       src={`${config.backendUrl}${image}`}
-                                       alt={`Image ${index + 1}`}
-                                       className="w-full h-16 sm:h-20 object-cover rounded border border-gray-200 cursor-pointer transition-opacity"
-                                       style={{ touchAction: 'manipulation' }}
-                                       onClick={() => openImageModal(type.images, index)}
-                                     />
-                                     <button 
-                                       className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                                       onClick={(e) => {
-                                         e.stopPropagation()
-                                         deleteImage(type.id, index)
-                                       }}
-                                       title="Delete image"
-                                     >
-                                       <Trash2 className="h-3 w-3" />
-                                     </button>
-                                   </div>
-                                ))}
-                              </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -848,19 +1019,19 @@ export default function TowerCaptureForm() {
                 )}
               </div>
             ))}
-                     </div>
-         )}
-       </div>
+          </div>
+        )}
+      </div>
 
-       {/* Image Modal */}
-       <ImageModal
-         isOpen={isModalOpen}
-         onClose={closeImageModal}
-         images={modalImages}
-         currentIndex={modalCurrentIndex}
-         onPrevious={goToPreviousImage}
-         onNext={goToNextImage}
-       />
-     </div>
-   )
- }
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={isModalOpen}
+        onClose={closeImageModal}
+        images={modalImages}
+        currentIndex={modalCurrentIndex}
+        onPrevious={goToPreviousImage}
+        onNext={goToNextImage}
+      />
+    </div>
+  )
+}

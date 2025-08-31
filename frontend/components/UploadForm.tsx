@@ -72,7 +72,8 @@ export default function UploadForm({ user }: UploadFormProps) {
       setIsLoading(true)
       setMessage('')
       
-      const newSite = await sitesAPI.create(data.siteCode)
+      const newSiteResponse = await sitesAPI.create(data.siteCode)
+      const newSite = newSiteResponse.site
       setSites(prev => [newSite, ...prev])
       setSelectedSite(newSite)
       reset()
@@ -93,7 +94,8 @@ export default function UploadForm({ user }: UploadFormProps) {
       setIsLoading(true)
       setMessage('')
       
-      const newType = await typesAPI.create(selectedSite.id, data.typeName)
+      const newTypeResponse = await typesAPI.create(selectedSite.id, data.typeName)
+      const newType = newTypeResponse.type
       setTypes(prev => [newType, ...prev])
       setSelectedType(newType)
       reset()

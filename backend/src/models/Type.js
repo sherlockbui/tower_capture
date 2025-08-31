@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { transformTimestamps } = require('../utils/timezone');
 
 const typeSchema = new mongoose.Schema({
   siteId: {
@@ -17,7 +18,9 @@ const typeSchema = new mongoose.Schema({
     required: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { transform: transformTimestamps },
+  toObject: { transform: transformTimestamps }
 });
 
 // Ensure typeName is unique per site

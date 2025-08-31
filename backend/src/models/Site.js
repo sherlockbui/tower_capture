@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { transformTimestamps } = require('../utils/timezone');
 
 const siteSchema = new mongoose.Schema({
   siteCode: {
@@ -12,7 +13,9 @@ const siteSchema = new mongoose.Schema({
     required: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { transform: transformTimestamps },
+  toObject: { transform: transformTimestamps }
 });
 
 // Ensure siteCode is unique per user

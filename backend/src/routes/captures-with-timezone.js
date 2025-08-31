@@ -5,6 +5,12 @@ const Type = require('../models/Type');
 const Site = require('../models/Site');
 const { auth } = require('../middleware/auth');
 const { upload, handleCloudinaryUpload } = require('../middleware/upload');
+const { 
+  getDayRangeVietnam, 
+  toUTC, 
+  toVietnamTimeString,
+  getCurrentVietnamTime 
+} = require('../utils/timezone');
 
 const router = express.Router();
 
@@ -55,10 +61,14 @@ router.post('/types/:typeId/captures', [
       }
     });
 
+    // Use current Vietnam time for capturedAt
+    const vietnamTime = getCurrentVietnamTime();
+
     const capture = new Capture({
       typeId,
       images: imageUrls,
-      capturedBy: req.user._id
+      capturedBy: req.user._id,
+      capturedAt: vietnamTime // This will be stored as UTC in MongoDB
     });
 
     await capture.save();
@@ -72,7 +82,8 @@ router.post('/types/:typeId/captures', [
         siteCode: site.siteCode,
         images: capture.images,
         capturedBy: req.user.username,
-        capturedAt: capture.capturedAt
+        capturedAt: capture.capturedAt, // Automatically converted to Vietnam timezone
+        capturedAtFormatted: toVietnamTimeString(capture.capturedAt, 'DD/MM/YYYY HH:mm')
       }
     });
   } catch (error) {
@@ -81,7 +92,7 @@ router.post('/types/:typeId/captures', [
   }
 });
 
-// Get captures by date
+// Get captures by date (now with Vietnam timezone support)
 router.get('/', auth, async (req, res) => {
   try {
     const { date } = req.query;
@@ -90,14 +101,14 @@ router.get('/', auth, async (req, res) => {
       return res.status(400).json({ message: 'Date parameter is required (YYYY-MM-DD)' });
     }
 
-    // Parse date and create date range
-    const startDate = new Date(date);
-    startDate.setHours(0, 0, 0, 0);
+    // Parse date and create date range in Vietnam timezone
+    const { start, end } = getDayRangeVietnam(date);
     
-    const endDate = new Date(date);
-    endDate.setHours(23, 59, 59, 999);
+    // Convert to UTC for MongoDB query (since data is stored in UTC)
+    const utcStart = toUTC(start);
+    const utcEnd = toUTC(end);
 
-    let query = { capturedAt: { $gte: startDate, $lte: endDate } };
+    let query = { capturedAt: { $gte: utcStart, $lte: utcEnd } };
 
     // If user is not admin, only show their captures
     if (req.user.role !== 'admin') {
@@ -113,7 +124,8 @@ router.get('/', auth, async (req, res) => {
         }
       })
       .populate('capturedBy', 'username')
-      .sort({ capturedAt: -1 });
+      .sort({ capturedAt: -1 })
+      .lean(); // Use lean() for better performance and automatic timezone conversion
 
     res.json({
       captures: captures.map(capture => ({
@@ -123,8 +135,21 @@ router.get('/', auth, async (req, res) => {
         siteCode: capture.typeId.siteId.siteCode,
         images: capture.images,
         capturedBy: capture.capturedBy.username,
-        capturedAt: capture.capturedAt
-      }))
+        capturedAt: capture.capturedAt, // Now in Vietnam timezone
+        capturedAtFormatted: toVietnamTimeString(capture.capturedAt, 'DD/MM/YYYY HH:mm'),
+        createdAt: capture.createdAt, // Now in Vietnam timezone
+        updatedAt: capture.updatedAt // Now in Vietnam timezone
+      })),
+      dateRange: {
+        vietnam: {
+          start: toVietnamTimeString(start),
+          end: toVietnamTimeString(end)
+        },
+        utc: {
+          start: utcStart,
+          end: utcEnd
+        }
+      }
     });
   } catch (error) {
     console.error('Get captures error:', error);

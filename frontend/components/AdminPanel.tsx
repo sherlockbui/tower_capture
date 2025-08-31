@@ -1,16 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminAPI, capturesAPI } from '@/lib/api'
-import { Capture } from '@/types'
-import { Download, Trash2, BarChart3, Calendar, FileText, Users } from 'lucide-react'
+import { adminAPI } from '@/lib/api'
+import { Download, Trash2, BarChart3, Users, UserCheck, MapPin, Camera } from 'lucide-react'
 import { format } from 'date-fns'
 import CreateUserForm from './CreateUserForm'
 
 export default function AdminPanel() {
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [exportDate, setExportDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [userStatsDate, setUserStatsDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [cleanupDate, setCleanupDate] = useState(format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'))
-  const [captures, setCaptures] = useState<Capture[]>([])
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalSites: 0,
@@ -18,14 +17,22 @@ export default function AdminPanel() {
     totalCaptures: 0,
     totalImages: 0
   })
+  const [userStats, setUserStats] = useState<Array<{
+    _id: string
+    username: string
+    role: string
+    captureCount: number
+    uniqueSites: number
+    imageCount: number
+  }>>([])
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
 
   useEffect(() => {
     loadStats()
-    loadCapturesByDate()
-  }, [selectedDate])
+    loadUserStats()
+  }, [userStatsDate])
 
   const loadStats = async () => {
     try {
@@ -36,16 +43,15 @@ export default function AdminPanel() {
     }
   }
 
-  const loadCapturesByDate = async () => {
+
+
+  const loadUserStats = async () => {
     try {
-      setIsLoading(true)
-      const dateCaptures = await capturesAPI.getByDate(selectedDate)
-      setCaptures(dateCaptures.captures)
+      const userStatsData = await adminAPI.getUserStats(userStatsDate)
+      setUserStats(userStatsData.userStats)
     } catch (error) {
-      console.error('Failed to load captures:', error)
-      setCaptures([])
-    } finally {
-      setIsLoading(false)
+      console.error('Failed to load user stats:', error)
+      setUserStats([])
     }
   }
 
@@ -54,19 +60,24 @@ export default function AdminPanel() {
       setIsLoading(true)
       setMessage('')
       
-      const blob = await adminAPI.exportData(selectedDate)
+      // Backend returns Excel file directly
+      const response = await adminAPI.exportData(exportDate)
       
-      // Create download link
+      // Create download link for the Excel file
+      const blob = new Blob([response], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      })
+      
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `export_${selectedDate}.zip`
+      a.download = `captures_report_${exportDate}.xlsx`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
       
-      setMessage('Export completed successfully!')
+      setMessage('Export to Excel completed successfully!')
       setMessageType('success')
     } catch (error: any) {
       setMessage(error.response?.data?.message || 'Export failed')
@@ -75,6 +86,40 @@ export default function AdminPanel() {
       setIsLoading(false)
     }
   }
+
+  const handleDownloadImages = async () => {
+    try {
+      setIsLoading(true)
+      setMessage('')
+      
+      // Backend returns ZIP file with all images
+      const response = await adminAPI.downloadImages(exportDate)
+      
+      // Create download link for the ZIP file
+      const blob = new Blob([response], { 
+        type: 'application/zip' 
+      })
+      
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `captures_${exportDate}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      setMessage('Download all images completed successfully!')
+      setMessageType('success')
+    } catch (error: any) {
+      setMessage(error.response?.data?.message || 'Download failed')
+      setMessageType('error')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+
 
   const handleCleanup = async () => {
     if (!confirm(`Are you sure you want to delete all data before ${cleanupDate}? This action cannot be undone.`)) {
@@ -131,33 +176,159 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      {/* Data Export */}
+      {/* User Performance Statistics */}
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Download className="h-5 w-5 mr-2" />
-          Export Data
-        </h3>
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="exportDate" className="block text-sm font-medium text-gray-700 mb-1">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+            <UserCheck className="h-5 w-5 mr-2" />
+            User Performance Report
+          </h3>
+          <div className="mt-3 sm:mt-0">
+            <label htmlFor="userStatsDate" className="block text-sm font-medium text-gray-700 mb-1">
               Select Date
             </label>
             <input
               type="date"
-              id="exportDate"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              id="userStatsDate"
+              value={userStatsDate}
+              onChange={(e) => setUserStatsDate(e.target.value)}
               className="input-field"
             />
           </div>
-          <button
-            onClick={handleExport}
-            disabled={isLoading}
-            className="btn-primary flex items-center space-x-2"
-          >
-            <Download className="h-4 w-4" />
-            <span>{isLoading ? 'Exporting...' : 'Export Data'}</span>
-          </button>
+        </div>
+        
+        {userStats.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <UserCheck className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+            <p>No user activity found for {userStatsDate}</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="text-sm text-gray-600 mb-4">
+            </div>
+            
+            {/* Report Table */}
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                      User
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                      Số Trạm chụp
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                      Số Type của Trạm
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                      Số hình của trạm
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {userStats.map((user, index) => (
+                    <tr key={user._id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors duration-150`}>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                            <span className="text-white text-sm font-medium">
+                              {user.username.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900">{user.username}</div>
+                            <div className="text-xs text-gray-500 capitalize">{user.role}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex items-center justify-center space-x-2">
+                          <MapPin className="h-4 w-4 text-blue-600" />
+                          <span className="text-lg font-semibold text-blue-600">{user.uniqueSites}</span>
+                        </div>
+                        <div className="text-xs text-gray-500">trạm</div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex items-center justify-center space-x-2">
+                          <BarChart3 className="h-4 w-4 text-green-600" />
+                          <span className="text-lg font-semibold text-green-600">{user.captureCount}</span>
+                        </div>
+                        <div className="text-xs text-gray-500">type</div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex items-center justify-center space-x-2">
+                          <Camera className="h-4 w-4 text-purple-600" />
+                          <span className="text-lg font-semibold text-purple-600">{user.imageCount}</span>
+                        </div>
+                        <div className="text-xs text-gray-500">hình</div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50">
+                  <tr>
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      <div className="flex items-center space-x-2">
+                        <BarChart3 className="h-4 w-4 text-gray-600" />
+                        <span>Tổng cộng</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center font-medium text-gray-900">
+                      {userStats.reduce((sum, user) => sum + user.uniqueSites, 0)}
+                    </td>
+                    <td className="px-4 py-3 text-center font-medium text-gray-900">
+                      {userStats.reduce((sum, user) => sum + user.captureCount, 0)}
+                    </td>
+                    <td className="px-4 py-3 text-center font-medium text-gray-900">
+                      {userStats.reduce((sum, user) => sum + user.imageCount, 0)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Data Export */}
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <Download className="h-5 w-5 mr-2" />
+          Export & Download
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="exportDate" className="block text-sm font-medium text-gray-700 mb-1">
+              Select Date for Export
+            </label>
+            <input
+              type="date"
+              id="exportDate"
+              value={exportDate}
+              onChange={(e) => setExportDate(e.target.value)}
+              className="input-field"
+            />
+          </div>
+          <div className="flex space-x-3">
+            <button
+              onClick={handleExport}
+              disabled={isLoading}
+              className="btn-primary flex items-center space-x-2"
+            >
+              <Download className="h-4 w-4" />
+              <span>{isLoading ? 'Exporting...' : 'Export to Excel'}</span>
+            </button>
+            
+            <button
+              onClick={handleDownloadImages}
+              disabled={isLoading}
+              className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
+            >
+              <Download className="h-4 w-4" />
+              <span>{isLoading ? 'Downloading...' : 'Download All Images'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -200,60 +371,7 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      {/* Captures by Date */}
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Calendar className="h-5 w-5 mr-2" />
-          Captures for {selectedDate}
-        </h3>
-        
-        {isLoading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="text-gray-600 mt-2">Loading captures...</p>
-          </div>
-        ) : captures.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <FileText className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-            <p>No captures found for this date</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="text-sm text-gray-600">
-              Found {captures.length} captures with {captures.reduce((total, c) => total + c.images.length, 0)} images
-            </div>
-            <div className="space-y-3">
-              {captures.map((capture) => (
-                <div key={capture.id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <span className="font-medium text-gray-900">{capture.siteCode}</span>
-                      <span className="text-gray-500 mx-2">•</span>
-                      <span className="text-gray-700">{capture.typeName}</span>
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {format(new Date(capture.capturedAt), 'HH:mm')}
-                    </div>
-                  </div>
-                  <div className="text-sm text-gray-600 mb-2">
-                    Captured by: {capture.capturedBy}
-                  </div>
-                  <div className="flex space-x-2 overflow-x-auto">
-                    {capture.images.map((image, index) => (
-                      <img
-                        key={index}
-                        src={`http://localhost:5000${image}`}
-                        alt={`Image ${index + 1}`}
-                        className="w-16 h-16 object-cover rounded border border-gray-200"
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+
 
       {/* Message Display */}
       {message && (

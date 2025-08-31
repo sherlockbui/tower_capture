@@ -13,10 +13,22 @@
     "install:all": "yarn install && cd frontend && yarn install && cd ../backend && yarn install",
     "start": "cd backend && yarn start"
   },
-  "keywords": ["tower", "capture", "management", "fullstack", "nextjs", "express", "mongodb"],
+  "keywords": [
+    "tower",
+    "capture",
+    "management",
+    "fullstack",
+    "nextjs",
+    "express",
+    "mongodb"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.1",
+    "zod": "^4.1.5"
   }
 }

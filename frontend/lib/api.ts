@@ -96,6 +96,13 @@ export const adminAPI = {
     return response.data
   },
 
+  downloadImages: async (date: string): Promise<Blob> => {
+    const response = await api.get(`/admin/download-images?date=${date}`, {
+      responseType: 'blob',
+    })
+    return response.data
+  },
+
   cleanup: async (beforeDate: string): Promise<{ message: string; deletedCount: number }> => {
     const response = await api.delete(`/admin/cleanup?before=${beforeDate}`)
     return response.data
@@ -110,6 +117,23 @@ export const adminAPI = {
   }> => {
     const response = await api.get('/admin/stats')
     return response.data.stats
+  },
+
+  getUserStats: async (date: string): Promise<{
+    userStats: Array<{
+      _id: string
+      username: string
+      role: string
+      captureCount: number
+      uniqueSites: number
+      imageCount: number
+    }>
+    date: string
+    totalCaptures: number
+    totalImages: number
+  }> => {
+    const response = await api.get(`/admin/user-stats?date=${date}`)
+    return response.data
   },
 }
 

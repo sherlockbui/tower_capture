@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { transformTimestamps } = require('../utils/timezone');
 
 const userSchema = new mongoose.Schema({
   username: {
@@ -18,8 +19,12 @@ const userSchema = new mongoose.Schema({
     default: 'user'
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { transform: transformTimestamps },
+  toObject: { transform: transformTimestamps }
 });
+
+// ... existing code ...
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

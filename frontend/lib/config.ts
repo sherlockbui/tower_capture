@@ -1,7 +1,7 @@
 export const config = {
   // Backend Configuration
-  backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000',
-  apiUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api',
+  backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://192.168.1.42:5000',
+  apiUrl: process.env.NEXT_PUBLIC_API_BASE_URL || 'http://192.168.1.42:5000/api',
   
   // App Configuration
   appName: process.env.NEXT_PUBLIC_APP_NAME || 'Tower Capture Management',
