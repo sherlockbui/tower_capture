@@ -10,6 +10,7 @@ const archiver = require('archiver');
 const path = require('path');
 const fs = require('fs');
 const cloudinary = require('cloudinary').v2; // Added for Cloudinary cleanup
+const axios = require('axios'); // Added for Cloudinary image download
 
 const router = express.Router();
 
@@ -241,42 +242,57 @@ router.get('/download-images', [
     });
 
     // Add images to ZIP with folder structure
-    Object.entries(siteGroups).forEach(([siteCode, siteCaptures]) => {
-      siteCaptures.forEach(capture => {
-        capture.images.forEach((imagePath, index) => {
-          // Skip Cloudinary URLs - only process local files
-          if (imagePath.includes('cloudinary.com')) {
-            console.log('Skipping Cloudinary image:', imagePath);
-            return;
-          }
+    for (const [siteCode, siteCaptures] of Object.entries(siteGroups)) {
+      for (const capture of siteCaptures) {
+        for (let index = 0; index < capture.images.length; index++) {
+          const imagePath = capture.images[index];
           
-          // Only handle local uploads
-          if (imagePath.startsWith('/uploads/')) {
-            // Remove leading slash if present and construct full path
-            const cleanImagePath = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
-            const fullImagePath = path.join(__dirname, '../../', cleanImagePath);
-            
-            console.log('Processing local image:', {
-              originalPath: imagePath,
-              cleanPath: cleanImagePath,
-              fullPath: fullImagePath,
-              exists: fs.existsSync(fullImagePath)
-            });
-            
-            if (fs.existsSync(fullImagePath)) {
-              const fileName = `${capture.typeId.typeName}_${capture._id}_${index}${path.extname(imagePath)}`;
+          if (imagePath.includes('cloudinary.com')) {
+            // Production: Handle Cloudinary images
+            try {
+              console.log('Processing Cloudinary image:', imagePath);
+              
+              // Download image from Cloudinary
+              const response = await axios.get(imagePath, { responseType: 'stream' });
+              
+              const fileName = `${capture.typeId.typeName}_${capture._id}_${index}.jpg`;
               const zipPath = `${siteCode}/${fileName}`;
-              archive.file(fullImagePath, { name: zipPath });
-              console.log('Added local image to ZIP:', zipPath);
-            } else {
-              console.log('Local image not found:', fullImagePath);
+              
+              archive.append(response.data, { name: zipPath });
+              console.log('Added Cloudinary image to ZIP:', zipPath);
+            } catch (error) {
+              console.error('Error downloading Cloudinary image:', imagePath, error);
+            }
+          } else if (imagePath.startsWith('/uploads/')) {
+            // Development: Handle local files
+            try {
+              const cleanImagePath = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
+              const fullImagePath = path.join(__dirname, '../../', cleanImagePath);
+              
+              console.log('Processing local image:', {
+                originalPath: imagePath,
+                cleanPath: cleanImagePath,
+                fullPath: fullImagePath,
+                exists: fs.existsSync(fullImagePath)
+              });
+              
+              if (fs.existsSync(fullImagePath)) {
+                const fileName = `${capture.typeId.typeName}_${capture._id}_${index}${path.extname(imagePath)}`;
+                const zipPath = `${siteCode}/${fileName}`;
+                archive.file(fullImagePath, { name: zipPath });
+                console.log('Added local image to ZIP:', zipPath);
+              } else {
+                console.log('Local image not found:', fullImagePath);
+              }
+            } catch (error) {
+              console.error('Error processing local image:', imagePath, error);
             }
           } else {
-            console.log('Skipping non-uploads image:', imagePath);
+            console.log('Skipping unsupported image type:', imagePath);
           }
-        });
-      });
-    });
+        }
+      }
+    }
 
     archive.finalize();
 
