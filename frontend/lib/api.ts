@@ -86,6 +86,12 @@ export const capturesAPI = {
     const response = await api.get(`/captures?date=${date}`)
     return response.data
   },
+
+  // Admin method to get all captures by date
+  getByDateAdmin: async (date: string): Promise<{ captures: Capture[] }> => {
+    const response = await api.get(`/captures/admin/all?date=${date}`)
+    return response.data
+  },
 }
 
 export const adminAPI = {

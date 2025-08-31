@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Upload, Plus, X, Trash2, Edit3, ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react'
+import { Upload, Plus, X, Trash2, Edit3, ChevronDown, ChevronRight, Image as ImageIcon, Eye, EyeOff } from 'lucide-react'
 import { sitesAPI, typesAPI, capturesAPI } from '@/lib/api'
 import { config, getImageUrl } from '@/lib/config'
 import ImageModal from './ImageModal'
+import { User } from '@/types'
 
 // Validation schemas
 const stationCodeSchema = z.object({
@@ -46,7 +47,11 @@ interface StationData {
   }[]
 }
 
-export default function TowerCaptureForm() {
+interface TowerCaptureFormProps {
+  user: User | null
+}
+
+export default function TowerCaptureForm({ user }: TowerCaptureFormProps) {
   const [captureTypes, setCaptureTypes] = useState<CaptureType[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState('')
@@ -73,6 +78,36 @@ export default function TowerCaptureForm() {
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set())
   const [isLoadingStations, setIsLoadingStations] = useState(false)
   const [addingImagesTypeId, setAddingImagesTypeId] = useState<string | null>(null)
+
+  // Admin toggle state
+  const [showAllData, setShowAllData] = useState(false)
+
+  // Initialize with one default capture type
+  useEffect(() => {
+    // Add one default capture type when component mounts
+    if (captureTypes.length === 0) {
+      setCaptureTypes([{
+        id: 'default-1',
+        typeName: '',
+        note: '',
+        images: []
+      }])
+    }
+  }, [])
+
+  // Check if form is valid for upload
+  const isFormValid = () => {
+    // Check if station code is filled
+    if (!stationForm.getValues('stationCode')) {
+      return false
+    }
+    
+    // Check if at least one capture type has required fields
+    return captureTypes.some(type => 
+      type.typeName.trim() !== '' && 
+      type.images.length > 0
+    )
+  }
 
   // Date navigation state
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -116,7 +151,7 @@ export default function TowerCaptureForm() {
   // Load uploaded stations on component mount
   useEffect(() => {
     loadUploadedStations()
-  }, [selectedDate]) // Reload when date changes
+  }, [selectedDate, showAllData]) // Reload when date changes or admin toggle changes
 
   const loadUploadedStations = async () => {
     try {
@@ -128,7 +163,18 @@ export default function TowerCaptureForm() {
       const dateString = `${year}-${month}-${day}`
       console.log('Loading stations for date:', dateString)
 
-      const response = await capturesAPI.getByDate(dateString)
+      // Use appropriate API based on user role and admin preference
+      let response
+      if (user?.role === 'admin' && showAllData) {
+        // Admin wants to see all users' data
+        response = await capturesAPI.getByDateAdmin(dateString)
+        console.log('Admin loading all users data')
+      } else {
+        // Regular users or admin viewing own data only
+        response = await capturesAPI.getByDate(dateString)
+        console.log(user?.role === 'admin' ? 'Admin loading own data only' : 'User loading own data')
+      }
+      
       console.log('API response:', response)
 
       // Group captures by station and type
@@ -592,13 +638,22 @@ export default function TowerCaptureForm() {
         {/* Station Code */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Station Code *
+            Station Code * 
+            {stationForm.getValues('stationCode') ? (
+              <span className="text-green-600 ml-2 text-xs">✓ Đã nhập</span>
+            ) : (
+              <span className="text-orange-600 ml-2 text-xs">(Chưa nhập)</span>
+            )}
           </label>
           <input
             {...stationForm.register('stationCode')}
             type="text"
-            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              stationForm.formState.errors.stationCode ? 'border-red-500' : 'border-gray-300'
+            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 ${
+              stationForm.formState.errors.stationCode 
+                ? 'border-red-500' 
+                : stationForm.getValues('stationCode') 
+                  ? 'border-green-500' 
+                  : 'border-orange-300'
             }`}
             placeholder="Nhập mã trạm..."
             onChange={(e) => {
@@ -627,8 +682,8 @@ export default function TowerCaptureForm() {
           {captureTypes.length === 0 && (
             <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
               <Plus className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-              <p>Chưa có Capture Type nào</p>
-              <p className="text-sm text-gray-400 mt-1">Hãy click "Add Type" để bắt đầu</p>
+              <p>Đang tải form...</p>
+              <p className="text-sm text-gray-400 mt-1">Vui lòng đợi một chút</p>
             </div>
           )}
 
@@ -636,15 +691,21 @@ export default function TowerCaptureForm() {
             {captureTypes.map((type, index) => (
               <div key={type.id} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex justify-between items-start mb-4">
-                  <h4 className="font-medium text-gray-900">Type {index + 1}</h4>
-                  {captureTypes.length > 1 && (
-                    <button
-                      onClick={() => removeCaptureType(type.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
+                  <h4 className="font-medium text-gray-900">
+                    {index === 0 ? 'Main Type' : `Type ${index + 1}`}
+                  </h4>
+                  <button
+                    onClick={() => removeCaptureType(type.id)}
+                    className={`${
+                      captureTypes.length === 1 
+                        ? 'text-gray-400 cursor-not-allowed' 
+                        : 'text-red-600 hover:text-red-700'
+                    }`}
+                    disabled={captureTypes.length === 1}
+                    title={captureTypes.length === 1 ? "Cannot remove the last type" : "Remove this type"}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
 
                 {/* Type Name */}
@@ -659,13 +720,23 @@ export default function TowerCaptureForm() {
                       const value = e.target.value
                       updateCaptureType(type.id, 'typeName', value)
                     }}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      type.typeName.includes(' ') ? 'border-red-500' : 'border-gray-300'
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 ${
+                      type.typeName.includes(' ') 
+                        ? 'border-red-500' 
+                        : type.typeName.trim() === '' 
+                          ? 'border-orange-300' 
+                          : 'border-green-500'
                     }`}
                     placeholder="BTS, GPV, etc..."
                   />
                   {type.typeName.includes(' ') && (
                     <p className="text-red-600 text-sm mt-1">Type Name không được chứa khoảng trắng</p>
+                  )}
+                  {type.typeName.trim() === '' && (
+                    <p className="text-orange-600 text-sm mt-1">Type Name là bắt buộc</p>
+                  )}
+                  {type.typeName.trim() !== '' && !type.typeName.includes(' ') && (
+                    <p className="text-green-600 text-sm mt-1">✓ Type Name hợp lệ</p>
                   )}
                 </div>
 
@@ -686,7 +757,13 @@ export default function TowerCaptureForm() {
                 {/* Images */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Images *
+                    Images * 
+                    {type.images.length === 0 && (
+                      <span className="text-orange-600 ml-2 text-xs">(Chưa chọn hình)</span>
+                    )}
+                    {type.images.length > 0 && (
+                      <span className="text-green-600 ml-2 text-xs">✓ Đã chọn {type.images.length} hình</span>
+                    )}
                   </label>
                   <div className="flex items-center space-x-3 mb-3">
                     <input
@@ -761,11 +838,22 @@ export default function TowerCaptureForm() {
         {/* Upload Button */}
         <button
           onClick={handleUpload}
-          disabled={isLoading}
-          className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 flex items-center justify-center space-x-2"
+          disabled={isLoading || !isFormValid()}
+          className={`w-full py-3 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center space-x-2 transition-all duration-200 ${
+            isLoading || !isFormValid()
+              ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-50'
+              : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
         >
           <Upload className="h-5 w-5" />
-          <span>{isLoading ? 'Đang upload...' : 'Upload Images'}</span>
+          <span>
+            {isLoading 
+              ? 'Đang upload...' 
+              : !isFormValid() 
+                ? 'Vui lòng điền đầy đủ thông tin' 
+                : 'Upload Images'
+            }
+          </span>
         </button>
       </div>
 
@@ -784,7 +872,36 @@ export default function TowerCaptureForm() {
       {/* Uploaded Images Section */}
       <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6">
         <div className="flex flex-col space-y-4 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Uploaded Images</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">Uploaded Images</h2>
+            
+            {/* Admin Toggle for Viewing All Data */}
+            {user?.role === 'admin' && (
+              <div className="flex items-center space-x-3 mt-2 sm:mt-0">
+                <span className="text-sm text-gray-600">View all users:</span>
+                <button
+                  onClick={() => setShowAllData(!showAllData)}
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    showAllData
+                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                      : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                  }`}
+                >
+                  {showAllData ? (
+                    <>
+                      <Eye className="h-4 w-4" />
+                      <span>All Users</span>
+                    </>
+                  ) : (
+                    <>
+                      <EyeOff className="h-4 w-4" />
+                      <span>My Data Only</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Date Navigation */}
           <div className="flex flex-wrap items-center gap-2">

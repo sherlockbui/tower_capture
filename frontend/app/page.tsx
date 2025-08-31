@@ -68,7 +68,7 @@ export default function Home() {
 
     switch (currentView) {
       case 'upload':
-        return <TowerCaptureForm />
+        return <TowerCaptureForm user={user} />
       case 'admin':
         return <AdminPanel />
       default:
