@@ -1309,6 +1309,7 @@ export default function TowerCaptureForm({ user }: TowerCaptureFormProps) {
                               type="file"
                               multiple
                               accept="image/*"
+                              capture="environment"
                               className="hidden"
                               onChange={(e) => e.target.files && addImagesToExistingType(type.id, e.target.files)}
                             />
